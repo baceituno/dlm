@@ -239,7 +239,7 @@ losses_val = []
 
 # training set
 print("training...")
-for epoch in range(300):  # loop over the dataset multiple times
+for epoch in range(1000):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
