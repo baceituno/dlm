@@ -258,7 +258,7 @@ class Net(torch.nn.Module):
                 y = torch.cat((y, y_1), axis = 0)
         return y
 
-    def vertex_forward(self, xtraj, x, x_img): 
+    def forward_v(self, xtraj, x, x_img): 
         # passes through the optimization problem
         first = True
     
@@ -277,6 +277,28 @@ class Net(torch.nn.Module):
                 first = False
             else:
                 y_1 = 100*dv.view(1,-1)
+                y = torch.cat((y, y_1), axis = 0)
+        return y
+
+    def forward_p(self, xtraj, x, x_img): 
+        # passes through the optimization problem
+        first = True
+    
+        # shape encoding        
+        e_img = self.forward_encoder(np.reshape(x_img,(-1,1,50,50)))
+
+        # decodes each trajectory
+        for i in range(np.shape(x)[0]):
+            # learnes the vertices parameters
+            p = self.p_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+            p_r0 = x[i,0:20]
+            dp = p - p_r0
+            
+            if first:                
+                y = 100*dp.view(1,-1)
+                first = False
+            else:
+                y_1 = 100*dp.view(1,-1)
                 y = torch.cat((y, y_1), axis = 0)
         return y
 
@@ -352,11 +374,11 @@ for epoch in range(20):  # loop over the dataset multiple times
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
 
-print("training vertex decoder")
+print("training decoders")
 for epoch in range(20):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
-    dv = net.vertex_forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
+    dv = net.forward_v(inputs_1.float(),inputs_2.float(),inputs_img.float())
     loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,1))).float())
     loss.backward()
     optimizer.step()
@@ -364,6 +386,17 @@ for epoch in range(20):  # loop over the dataset multiple times
     loss_t = loss.item()
 
     print("Vertex decoder loss at epoch ",epoch," = ",loss_t)
+
+    loss_t = 0
+    optimizer.zero_grad()
+    dv = net.forward_p(inputs_1.float(),inputs_2.float(),inputs_img.float())
+    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,1))).float())
+    loss.backward()
+    optimizer.step()
+    
+    loss_t = loss.item()
+
+    print("Guess decoder loss at epoch ",epoch," = ",loss_t)
 
 # validation data
 data1 = np.array((loadtxt("../data/data_2_2f_sq.csv", delimiter=',')))
