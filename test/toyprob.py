@@ -27,12 +27,19 @@ class Net(torch.nn.Module):
         self.encoder.add_module("pool_2", torch.nn.MaxPool2d(kernel_size=4))
         self.encoder.add_module("relu_2", torch.nn.ReLU())
         self.encoder.add_module("flatten", torch.nn.Flatten())
-        self.encoder.add_module("fc3", torch.nn.Linear(320, 320))
-        self.encoder.add_module("dropout_3", torch.nn.Dropout(0.2))
-        self.encoder.add_module("relu_3", torch.nn.ReLU())
-        self.encoder.add_module("fc4", torch.nn.Linear(320, 100))
-        self.encoder.add_module("bn6", torch.nn.BatchNorm1d(100))
 
+        # layers for VAE
+        self.fc1 = torch.nn.Linear(320, 100)
+        self.fc2 = torch.nn.Linear(320, 100)
+        self.fc3 = torch.nn.Linear(100, 320)
+
+        # shape decoders
+        self.decoder = torch.nn.Sequential()
+        self.decoder.add_module("deconv_2", torch.nn.ConvTranspose2d(20, 10, kernel_size=23))
+        self.decoder.add_module("derelu_2", torch.nn.ReLU())
+        self.decoder.add_module("deconv_1", torch.nn.ConvTranspose2d(10, 1, kernel_size=25))
+        self.decoder.add_module("derelu_1", torch.nn.Sigmoid())
+        
         # p_r decoder
         self.p_dec = torch.nn.Sequential()
         self.p_dec.add_module("fc5", torch.nn.Linear(145, 200))
@@ -204,7 +211,7 @@ class Net(torch.nn.Module):
         first = True
     
         # shape encoding        
-        e_img = self.encoder.forward(np.reshape(x_img,(-1,1,50,50)))
+        e_img = self.forward_encoder(np.reshape(x_img,(-1,1,50,50)))
 
         # decodes each trajectory
         for i in range(np.shape(x)[0]):
@@ -228,30 +235,70 @@ class Net(torch.nn.Module):
             v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
             p_e = self.pe_dec.forward(torch.cat([e_img[i,:].view(1,100), xtraj[i,:].view(1,45)], 1))
             fc = self.fc_dec.forward(torch.cat([xtraj[i,:].view(1,45), v.view(1,40)], 1))
+            
+            # p_e = p_e0
             fc_e = self.fce_dec.forward(torch.cat([p_e.view(1,20), xtraj[i,:].view(1,45)], 1))
 
             # p_r = p_r0
             # v = v0
-            # p_e = p_e0
             # fc = fc0
             # fc_e = fc_e0
 
             p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
 
             # autoencoding errors
-            dp = p_r - p_r0
+            # dp = p_r - p_r0
             dv = v - v0
-            dfc = fc - fc0
-            dpe = p_e - p_e0
-            dfce = fc_e - fc_e0
+            # dfc = fc - fc0
+            # dpe = p_e - p_e0
+            # dfce = fc_e - fc_e0
+
+            dp = (p_r0 - p_r0)*0
+            # dv = (v0 - v0)*0
+            dfc = (fc0 - fc0)*0
+            dpe = (p_e0 - p_e0)*0
+            dfce = (fc_e0 - fc_e0)*0
             
             if first:                
-                y = 330*torch.cat([p.view(1,-1), f.view(1,-1), 10*dp.view(1,-1), 10*dv.view(1,-1), dfc.view(1,-1)/10, 3*dpe.view(1,-1), dfce.view(1,-1)/10], axis = 1)
+                y = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
                 first = False
             else:
-                y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1), 10*dp.view(1,-1), 10*dv.view(1,-1), dfc.view(1,-1)/10, 3*dpe.view(1,-1), dfce.view(1,-1)/10], axis = 1)
+                y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
                 y = torch.cat((y, y_1), axis = 0)
         return y
+
+    def forward_vae(self, x_img):
+    	# encodes
+        h = self.encoder(np.reshape(x_img,(-1,1,50,50)))
+        # bottlenecks
+        mu, logvar = self.fc1(h), self.fc2(h)
+        std = logvar.mul(0.5).exp_()
+        esp = torch.randn(*mu.size())
+        # reparametrizes
+        z = mu + std * esp
+        z = self.fc3(z)
+
+        # decodes
+        return self.decoder(z.view(-1,20,4,4)), mu, logvar
+
+    def forward_encoder(self, x_img):
+    	# encodes
+        h = self.encoder(np.reshape(x_img,(-1,1,50,50)))
+        # bottlenecks
+        mu, logvar = self.fc1(h), self.fc2(h)
+        std = logvar.mul(0.5).exp_()
+        esp = torch.randn(*mu.size())
+        # reparametrizes
+        z = mu + std * esp
+
+        # decodes
+        return z
+
+def loss_fn(recon_x, x, mu, logvar):
+	x = np.reshape(x,(-1,1,50,50))
+	BCE = F.mse_loss(recon_x, x, size_average=False)
+	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+	return BCE + KLD
 
 print("loading data...")
 # loads the traijing data
@@ -272,7 +319,22 @@ inputs_1 = torch.tensor(data[:,:45]) # object trajectory
 inputs_2 = torch.tensor(data[:,45:205]) # trajectory decoding
 inputs_img = torch.tensor(data[:,205:205+img_dim]) # object shape
 
-labels = torch.cat((330*torch.tensor(data[:,205+img_dim:]),torch.tensor(np.zeros((N_data,160)))), axis = 1)
+optimizer = optim.Adam(net.parameters(), lr=0.01)
+
+# pdb.set_trace()
+
+print("training autoencoder")
+for epoch in range(150):  # loop over the dataset multiple times
+    loss_t = 0
+    optimizer.zero_grad()
+    outputs, mu, logvar = net.forward_vae(inputs_img.float())
+    loss = loss_fn(outputs, inputs_img.float(), mu, logvar)
+    loss.backward()
+    optimizer.step()
+    
+    loss_t = loss.item()
+
+    print("Autoencoder loss at epoch ",epoch," = ",loss_t)
 
 # validation data
 data1 = np.array((loadtxt("../data/data_2_2f_sq.csv", delimiter=',')))
@@ -281,19 +343,19 @@ inputs_21 = torch.tensor(data1[:,45:205]) # trajectory decoding
 inputs_img1 = torch.tensor(data1[:,205:205+img_dim]) # object shape
 N_data1 = np.shape(data1)[0]
 
+# labels
+labels = torch.cat((330*torch.tensor(data[:,205+img_dim:]),torch.tensor(np.zeros((N_data,160)))), axis = 1)
 labels1 = torch.cat((330*torch.tensor(data1[:,205+img_dim:]),torch.tensor(np.zeros((N_data1,160)))), axis = 1)
-
-criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=0.002)
-
-# pdb.set_trace()
 
 losses_test = []
 losses_val = []
 
+criterion = torch.nn.MSELoss(reduction='mean')
+optimizer = optim.Adam(net.parameters(), lr=0.001)
+
 # training set
-print("training...")
-for epoch in range(300):  # loop over the dataset multiple times
+print("training planner")
+for epoch in range(1000):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
