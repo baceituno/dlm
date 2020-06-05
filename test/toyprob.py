@@ -176,18 +176,10 @@ class Net(torch.nn.Module):
         # adds finite-diff constraints
         constraints = []
         for t in range(self.T):
-            if t == 0:
+            if t == 0 or t == self.T-1:
                 constraints.append(ddr[0,t]*(self.dt**2) == 0)
                 constraints.append(ddr[1,t]*(self.dt**2) == 0)
                 constraints.append(ddr[2,t]*(self.dt**2) == 0)
-
-                constraints.append(dr[0,t] == 0)
-                constraints.append(dr[1,t] == 0)
-                constraints.append(dr[2,t] == 0)
-            elif t == self.T-1:
-                constraints.append(ddr[0,t] == 0)
-                constraints.append(ddr[1,t] == 0)
-                constraints.append(ddr[2,t] == 0)
 
                 constraints.append(dr[0,t] == 0)
                 constraints.append(dr[1,t] == 0)
@@ -240,7 +232,7 @@ class Net(torch.nn.Module):
             fc_e = self.fce_dec.forward(torch.cat([p_e.view(1,20), xtraj[i,:].view(1,45)], 1))
 
             # p_r = p_r0
-            # v = v0
+            v = v0
             # fc = fc0
             # fc_e = fc_e0
 
@@ -248,22 +240,43 @@ class Net(torch.nn.Module):
 
             # autoencoding errors
             # dp = p_r - p_r0
-            dv = v - v0
+            # dv = v - v0
             # dfc = fc - fc0
             # dpe = p_e - p_e0
             # dfce = fc_e - fc_e0
-
-            dp = (p_r0 - p_r0)*0
-            # dv = (v0 - v0)*0
-            dfc = (fc0 - fc0)*0
-            dpe = (p_e0 - p_e0)*0
-            dfce = (fc_e0 - fc_e0)*0
+            dp = (p.view(1,-1) - p_r.view(1,-1))
+            dv = (v0 - v0)
+            dfc = (fc0 - fc0)
+            dpe = (p_e0 - p_e0)
+            dfce = (fc_e0 - fc_e0)
             
             if first:                
                 y = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
                 first = False
             else:
                 y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
+                y = torch.cat((y, y_1), axis = 0)
+        return y
+
+    def vertex_forward(self, xtraj, x, x_img): 
+        # passes through the optimization problem
+        first = True
+    
+        # shape encoding        
+        e_img = self.forward_encoder(np.reshape(x_img,(-1,1,50,50)))
+
+        # decodes each trajectory
+        for i in range(np.shape(x)[0]):
+            # learnes the vertices parameters
+            v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+            v0 = x[i,120:160]
+            dv = v - v0
+            
+            if first:                
+                y = 100*dv.view(1,-1)
+                first = False
+            else:
+                y_1 = 100*dv.view(1,-1)
                 y = torch.cat((y, y_1), axis = 0)
         return y
 
@@ -319,12 +332,12 @@ inputs_1 = torch.tensor(data[:,:45]) # object trajectory
 inputs_2 = torch.tensor(data[:,45:205]) # trajectory decoding
 inputs_img = torch.tensor(data[:,205:205+img_dim]) # object shape
 
-optimizer = optim.Adam(net.parameters(), lr=0.01)
+optimizer = optim.Adam(net.parameters(), lr=0.005)
 
 # pdb.set_trace()
 
 print("training autoencoder")
-for epoch in range(150):  # loop over the dataset multiple times
+for epoch in range(20):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs, mu, logvar = net.forward_vae(inputs_img.float())
@@ -335,6 +348,22 @@ for epoch in range(150):  # loop over the dataset multiple times
     loss_t = loss.item()
 
     print("Autoencoder loss at epoch ",epoch," = ",loss_t)
+
+criterion = torch.nn.MSELoss(reduction='mean')
+optimizer = optim.Adam(net.parameters(), lr=0.001)
+
+print("training vertex decoder")
+for epoch in range(20):  # loop over the dataset multiple times
+    loss_t = 0
+    optimizer.zero_grad()
+    dv = net.vertex_forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
+    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,1))).float())
+    loss.backward()
+    optimizer.step()
+    
+    loss_t = loss.item()
+
+    print("Vertex decoder loss at epoch ",epoch," = ",loss_t)
 
 # validation data
 data1 = np.array((loadtxt("../data/data_2_2f_sq.csv", delimiter=',')))
@@ -355,7 +384,7 @@ optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 # training set
 print("training planner")
-for epoch in range(1000):  # loop over the dataset multiple times
+for epoch in range(10):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
