@@ -47,17 +47,27 @@ class Net(torch.nn.Module):
         self.p_dec.add_module("relu_5", torch.nn.ReLU())
         self.p_dec.add_module("fc6", torch.nn.Linear(200, 200))
         self.p_dec.add_module("relu_6", torch.nn.ReLU())
+        self.p_dec.add_module("fc61", torch.nn.Linear(200, 200))
+        self.p_dec.add_module("relu_61", torch.nn.ReLU())
+        self.p_dec.add_module("fc62", torch.nn.Linear(200, 200))
+        self.p_dec.add_module("relu_62", torch.nn.ReLU())
+        self.p_dec.add_module("fc63", torch.nn.Linear(200, 200))
+        self.p_dec.add_module("relu_63", torch.nn.ReLU())
         self.p_dec.add_module("fc60", torch.nn.Linear(200, 20))
 
         # v decoder
         self.v_dec = torch.nn.Sequential()
-        self.v_dec.add_module("fc7", torch.nn.Linear(145, 1000))
+        self.v_dec.add_module("fc7", torch.nn.Linear(145, 200))
         self.v_dec.add_module("dropout_7", torch.nn.Dropout(0.2))
         self.v_dec.add_module("relu_7", torch.nn.ReLU())
-        self.v_dec.add_module("fc8", torch.nn.Linear(1000, 1000))
+        self.v_dec.add_module("fc8", torch.nn.Linear(200, 1000))
+        self.v_dec.add_module("relu_70", torch.nn.ReLU())
+        self.v_dec.add_module("fc80", torch.nn.Linear(1000, 1000))
+        self.v_dec.add_module("relu_700", torch.nn.ReLU())
+        self.v_dec.add_module("fc800", torch.nn.Linear(1000, 200))
         # self.v_dec.add_module("bn8", torch.nn.BatchNorm1d(1000))
         self.v_dec.add_module("relu_8", torch.nn.ReLU())
-        self.v_dec.add_module("fc9", torch.nn.Linear(1000, 200))
+        self.v_dec.add_module("fc9", torch.nn.Linear(200, 200))
         self.v_dec.add_module("relu_9", torch.nn.ReLU())
         self.v_dec.add_module("fc90", torch.nn.Linear(200, 40))
 
@@ -69,7 +79,13 @@ class Net(torch.nn.Module):
         self.fc_dec.add_module("relu_11", torch.nn.ReLU())
         self.fc_dec.add_module("fc12", torch.nn.Linear(200, 200))
         self.fc_dec.add_module("relu_12", torch.nn.ReLU())
-        self.fc_dec.add_module("fc120", torch.nn.Linear(200, 40))
+        self.fc_dec.add_module("fc120", torch.nn.Linear(200, 200))
+        self.fc_dec.add_module("relu_120", torch.nn.ReLU())
+        self.fc_dec.add_module("fc1200", torch.nn.Linear(200, 200))
+        self.fc_dec.add_module("relu_1200", torch.nn.ReLU())
+        self.fc_dec.add_module("fc12000", torch.nn.Linear(200, 200))
+        self.fc_dec.add_module("relu_12000", torch.nn.ReLU())
+        self.fc_dec.add_module("fc12001", torch.nn.Linear(200, 40))
 
         # p_e decoder
         self.pe_dec = torch.nn.Sequential()
@@ -77,18 +93,28 @@ class Net(torch.nn.Module):
         self.pe_dec.add_module("dropout_13", torch.nn.Dropout(0.3))
         self.pe_dec.add_module("relu_14", torch.nn.ReLU())
         self.pe_dec.add_module("fc14", torch.nn.Linear(200, 200))
-        # self.pe_dec.add_module("bn14", torch.nn.BatchNorm1d(num_features=200))
         self.pe_dec.add_module("relu_14", torch.nn.ReLU())
-        self.pe_dec.add_module("fc140", torch.nn.Linear(200, 20))
+        self.pe_dec.add_module("fc140", torch.nn.Linear(200, 200))
+        self.pe_dec.add_module("relu_140", torch.nn.ReLU())
+        self.pe_dec.add_module("fc1400", torch.nn.Linear(200, 200))
+        # self.pe_dec.add_module("bn14", torch.nn.BatchNorm1d(num_features=200))
+        self.pe_dec.add_module("relu_1400", torch.nn.ReLU())
+        self.pe_dec.add_module("fc14000", torch.nn.Linear(200, 20))
 
         # fc_e decoder
         self.fce_dec = torch.nn.Sequential()
         self.fce_dec.add_module("fc16", torch.nn.Linear(65, 100))
         # self.fce_dec.add_module("dropout_16", torch.nn.Dropout(0.3))
         self.fce_dec.add_module("relu_16", torch.nn.ReLU())
-        self.fce_dec.add_module("fc17", torch.nn.Linear(100, 100))
+        self.fce_dec.add_module("fc17", torch.nn.Linear(100, 200))
         self.fce_dec.add_module("relu_17", torch.nn.ReLU())
-        self.fce_dec.add_module("fc170", torch.nn.Linear(100, 40))
+        self.fce_dec.add_module("fc170", torch.nn.Linear(200, 200))
+        self.fce_dec.add_module("relu_170", torch.nn.ReLU())
+        self.fce_dec.add_module("fc1700", torch.nn.Linear(200, 200))
+        self.fce_dec.add_module("relu_1700", torch.nn.ReLU())
+        self.fce_dec.add_module("fc17000", torch.nn.Linear(200, 100))
+        self.fce_dec.add_module("relu_17000", torch.nn.ReLU())
+        self.fce_dec.add_module("fc17001", torch.nn.Linear(100, 40))
 
     def setup_cto(self):
         # decision variables
@@ -160,7 +186,7 @@ class Net(torch.nn.Module):
             constraints.append(gamma_e[2,t] >= 0)
             constraints.append(gamma_e[3,t] >= 0)
 
-        objective = cp.Minimize(cp.pnorm(f, p=1))
+        objective = cp.Minimize(cp.pnorm(f_e, p=1))
         problem = cp.Problem(objective, constraints)
         
         return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e])
@@ -231,12 +257,14 @@ class Net(torch.nn.Module):
             # p_e = p_e0
             fc_e = self.fce_dec.forward(torch.cat([p_e.view(1,20), xtraj[i,:].view(1,45)], 1))
 
-            # p_r = p_r0
-            v = v0
-            # fc = fc0
-            # fc_e = fc_e0
+            p_r = p_r0
+            # v = v0
+            fc = fc0
+            fc_e = fc_e0
 
             p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+
+            # p = p_r
 
             # autoencoding errors
             # dp = p_r - p_r0
@@ -244,7 +272,8 @@ class Net(torch.nn.Module):
             # dfc = fc - fc0
             # dpe = p_e - p_e0
             # dfce = fc_e - fc_e0
-            dp = (p.view(1,-1) - p_r.view(1,-1))
+
+            dp = (p_r0 - p_r0)
             dv = (v0 - v0)
             dfc = (fc0 - fc0)
             dpe = (p_e0 - p_e0)
@@ -348,18 +377,19 @@ print(N_data)
 
 # define network
 net = Net(N_data)
+net.load_state_dict(torch.load("../data/models/cnn_model.pt"))
 
 # Create Tensors to hold inputs and outputs
 inputs_1 = torch.tensor(data[:,:45]) # object trajectory
 inputs_2 = torch.tensor(data[:,45:205]) # trajectory decoding
 inputs_img = torch.tensor(data[:,205:205+img_dim]) # object shape
 
-optimizer = optim.Adam(net.parameters(), lr=0.005)
+optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 # pdb.set_trace()
 
 print("training autoencoder")
-for epoch in range(20):  # loop over the dataset multiple times
+for epoch in range(5000):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs, mu, logvar = net.forward_vae(inputs_img.float())
@@ -371,15 +401,17 @@ for epoch in range(20):  # loop over the dataset multiple times
 
     print("Autoencoder loss at epoch ",epoch," = ",loss_t)
 
+torch.save(net.state_dict(), "../data/models/cnn_model.pt")
+
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 print("training decoders")
-for epoch in range(20):  # loop over the dataset multiple times
+for epoch in range(5000):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     dv = net.forward_v(inputs_1.float(),inputs_2.float(),inputs_img.float())
-    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,1))).float())
+    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,40))).float())
     loss.backward()
     optimizer.step()
     
@@ -390,13 +422,15 @@ for epoch in range(20):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     dv = net.forward_p(inputs_1.float(),inputs_2.float(),inputs_img.float())
-    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,1))).float())
+    loss = criterion(dv.float(), torch.tensor(np.zeros((N_data,20))).float())
     loss.backward()
     optimizer.step()
     
     loss_t = loss.item()
 
     print("Guess decoder loss at epoch ",epoch," = ",loss_t)
+
+torch.save(net.state_dict(), "../data/models/cnn_model.pt")
 
 # validation data
 data1 = np.array((loadtxt("../data/data_2_2f_sq.csv", delimiter=',')))
@@ -417,7 +451,7 @@ optimizer = optim.Adam(net.parameters(), lr=0.001)
 
 # training set
 print("training planner")
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(5000):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -443,6 +477,8 @@ y = net.forward(torch.tensor(inputs_1).float(),torch.tensor(inputs_2).float(),to
 loss = criterion(y, labels.float())
 loss_t = loss.item()
 print("Train loss = ",loss_t)
+
+torch.save(net.state_dict(), "../data/models/cnn_model.pt")
 
 y = y.clone().detach()/330
 
