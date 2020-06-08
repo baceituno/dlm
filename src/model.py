@@ -27,6 +27,7 @@ class Net(torch.nn.Module):
         self.encoder.add_module("pool_2", torch.nn.MaxPool2d(kernel_size=4))
         self.encoder.add_module("relu_2", torch.nn.ReLU())
         self.encoder.add_module("flatten", torch.nn.Flatten())
+        self.encoder.add_module("fc_enc", torch.nn.Linear(320,320))
 
         # layers for VAE
         self.fc1 = torch.nn.Linear(320, 100)
@@ -58,7 +59,7 @@ class Net(torch.nn.Module):
         # v decoder
         self.v_dec = torch.nn.Sequential()
         self.v_dec.add_module("fc7", torch.nn.Linear(145, 200))
-        self.v_dec.add_module("dropout_7", torch.nn.Dropout(0.2))
+        # self.v_dec.add_module("dropout_7", torch.nn.Dropout(0.2))
         self.v_dec.add_module("relu_7", torch.nn.ReLU())
         self.v_dec.add_module("fc8", torch.nn.Linear(200, 1000))
         self.v_dec.add_module("relu_70", torch.nn.ReLU())
@@ -74,7 +75,7 @@ class Net(torch.nn.Module):
         # fc decoder
         self.fc_dec = torch.nn.Sequential()
         self.fc_dec.add_module("fc10", torch.nn.Linear(85, 200))
-        self.fc_dec.add_module("dropout_10", torch.nn.Dropout(0.2))
+        # self.fc_dec.add_module("dropout_10", torch.nn.Dropout(0.2))
         # self.fc_dec.add_module("bn11", torch.nn.BatchNorm1d(num_features=200))
         self.fc_dec.add_module("relu_11", torch.nn.ReLU())
         self.fc_dec.add_module("fc12", torch.nn.Linear(200, 200))
@@ -87,10 +88,24 @@ class Net(torch.nn.Module):
         self.fc_dec.add_module("relu_12000", torch.nn.ReLU())
         self.fc_dec.add_module("fc12001", torch.nn.Linear(200, 40))
 
+
+        self.cto_su = torch.nn.Sequential()
+        self.cto_su.add_module("fcx10", torch.nn.Linear(190, 200))
+        self.cto_su.add_module("relux_11", torch.nn.ReLU())
+        self.cto_su.add_module("fcx12", torch.nn.Linear(200, 200))
+        self.cto_su.add_module("rexlu_12", torch.nn.ReLU())
+        self.cto_su.add_module("fcx120", torch.nn.Linear(200, 200))
+        self.cto_su.add_module("rexlu_120", torch.nn.ReLU())
+        self.cto_su.add_module("fcx1200", torch.nn.Linear(200, 200))
+        self.cto_su.add_module("relux_1200", torch.nn.ReLU())
+        self.cto_su.add_module("fcx12000", torch.nn.Linear(200, 200))
+        self.cto_su.add_module("relux_12000", torch.nn.ReLU())
+        self.cto_su.add_module("fcx12001", torch.nn.Linear(200, 40))
+
         # p_e decoder
         self.pe_dec = torch.nn.Sequential()
         self.pe_dec.add_module("fc13", torch.nn.Linear(145, 200))
-        self.pe_dec.add_module("dropout_13", torch.nn.Dropout(0.3))
+        # self.pe_dec.add_module("dropout_13", torch.nn.Dropout(0.3))
         self.pe_dec.add_module("relu_14", torch.nn.ReLU())
         self.pe_dec.add_module("fc14", torch.nn.Linear(200, 200))
         self.pe_dec.add_module("relu_14", torch.nn.ReLU())
@@ -172,19 +187,19 @@ class Net(torch.nn.Module):
             for c in range(self.N_c):
                 constraints.append(gamma[c,t]*fc[c*self.N_c,t] + gamma[c + self.N_c,t]*fc[c*self.N_c + 2,t] == f[c,t])
                 constraints.append(gamma[c,t]*fc[c*self.N_c + 1,t] + gamma[c + self.N_c,t]*fc[c*self.N_c + 3,t] == f[self.N_c + c,t])
-                # constraints.append(gamma[c,t] >= 0)
-                # constraints.append(gamma[self.N_c + c,t] >= 0)
+                constraints.append(gamma[c,t] >= 0)
+                constraints.append(gamma[self.N_c + c,t] >= 0)
             
             # external friction cone constratins
             constraints.append(gamma_e[0,t]*fc_e[0,t] + gamma_e[1,t]*fc_e[2,t] == f_e[0,t])
             constraints.append(gamma_e[0,t]*fc_e[1,t] + gamma_e[1,t]*fc_e[3,t] == f_e[2,t])
-            # constraints.append(gamma_e[0,t] >= 0)
-            # constraints.append(gamma_e[1,t] >= 0)
+            constraints.append(gamma_e[0,t] >= 0)
+            constraints.append(gamma_e[1,t] >= 0)
 
             constraints.append(gamma_e[2,t]*fc_e[4,t] + gamma_e[3,t]*fc_e[6,t] == f_e[1,t])
             constraints.append(gamma_e[2,t]*fc_e[5,t] + gamma_e[3,t]*fc_e[7,t] == f_e[3,t])
-            # constraints.append(gamma_e[2,t] >= 0)
-            # constraints.append(gamma_e[3,t] >= 0)
+            constraints.append(gamma_e[2,t] >= 0)
+            constraints.append(gamma_e[3,t] >= 0)
 
         objective = cp.Minimize(cp.pnorm(f_e, p=2) + cp.pnorm(f, p=2))
         problem = cp.Problem(objective, constraints)
@@ -261,6 +276,63 @@ class Net(torch.nn.Module):
             # v = v0
             # fc = fc0
             # fc_e = fc_e0
+
+            p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+
+            # p = p_r
+
+            # autoencoding errors set to zero for now
+            dp = (p_r0 - p_r0)
+            dv = (v0 - v0)
+            dfc = (fc0 - fc0)
+            dpe = (p_e0 - p_e0)
+            dfce = (fc_e0 - fc_e0)
+            
+            if first:                
+                y = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
+                first = False
+            else:
+                y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
+                y = torch.cat((y, y_1), axis = 0)
+        return y
+
+    def forward_noenc(self, xtraj, x, x_img): 
+        # passes through the optimization problem
+        first = True
+    
+        # shape encoding        
+        e_img = self.forward_encoder(np.reshape(x_img,(-1,1,50,50)))
+        e_img = e_img.detach()
+
+        # decodes each trajectory
+        for i in range(np.shape(x)[0]):
+            # params that should be obtained from video
+            r = xtraj[i,:15]
+            p_e0 = x[i,60:80] # external contact location
+            v0 = x[i,120:160] # contact affordance
+
+            # params that can be computed explicity
+            dr = xtraj[i,15:30]
+            ddr = xtraj[i,30:]
+
+            # params that can be learned from above
+            p_r0 = x[i,0:20]
+            fc0 = x[i,20:60]
+            fc_e0 = x[i,80:120]
+
+            # learnes the parameters
+            # dr, ddr = self.Difflayer(r.view(3,5))
+            p_r = self.p_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+            v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+            p_e = self.pe_dec.forward(torch.cat([e_img[i,:].view(1,100), xtraj[i,:].view(1,45)], 1))
+            fc = self.fc_dec.forward(torch.cat([xtraj[i,:].view(1,45), v.view(1,40)], 1))
+            
+            # p_e = p_e0
+            fc_e = self.fce_dec.forward(torch.cat([p_e.view(1,20), xtraj[i,:].view(1,45)], 1))
+
+            # detaches
+            p_r.detach()
+            v.detach()
 
             p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
 
@@ -357,6 +429,17 @@ class Net(torch.nn.Module):
 
         # decodes
         return z
+
+    def save(self, name = "cnn_model.pt"):
+        torch.save(self.state_dict(),"../data/models/"+str(name))
+
+    def load(self, name =  = "cnn_model.pt"):
+        self.load_state_dict(torch.load("../data/models/"+str(name)))
+
+    def gen_res(self,inputs_1,inputs_2,inputs_img,name="res"):
+        y = self.forward(torch.tensor(inputs_1).float(),torch.tensor(inputs_2).float(),torch.tensor(inputs_img).float())
+        y = y.clone().detach()/330
+        np.savetxt("../data/"+name+"_0_2f.csv", y.data.numpy(), delimiter=",")
 
 def loss_fn(recon_x, x, mu, logvar):
     x = np.reshape(x,(-1,1,50,50))
