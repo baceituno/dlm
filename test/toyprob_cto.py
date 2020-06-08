@@ -44,8 +44,8 @@ class Net(nn.Module):
         constraints = []
         for t in range(self.T):
             # linear quasi-dynamics
-            constraints.append(sum(f[:20,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t])
-            constraints.append(sum(f[20:,t]) + f_e[2,t] + f_e[3,t] == ddr[1,t])
+            constraints.append(sum(f[:2,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t])
+            constraints.append(sum(f[2:,t]) + f_e[2,t] + f_e[3,t] == ddr[1,t])
 
             # angular dynamics with McCormick Envelopes
             tau = 0
