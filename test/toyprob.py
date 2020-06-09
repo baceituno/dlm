@@ -18,6 +18,11 @@ N_data = np.shape(data)[0]
 inputs_1, inputs_2, inputs_img, labels = parse_data(data)
 print(N_data)
 
+# validation data
+data1, _ = load_dataset(5,5)
+N_data1 = np.shape(data1)[0]
+inputs_11, inputs_21, inputs_img1, labels1 = parse_data(data1)
+
 # define network
 net = Net(N_data)
 net.load()
@@ -25,12 +30,12 @@ net.load()
 net.eval()
 
 print("training autoencoder")
-optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(10):  # loop over the dataset multiple times
+optimizer = optim.SGD(net.parameters(), lr=0.001)
+for epoch in range(100):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
-    outputs, mu, logvar = net.forward_vae(inputs_img.float())
-    loss = loss_fn(outputs, inputs_img.float(), mu, logvar)
+    outputs, mu, logvar = net.forwardShapeVAE(inputs_img.float())
+    loss = LossShapeVAE(outputs, inputs_img.float(), mu, logvar)
     loss.backward()
     optimizer.step()
     
@@ -43,7 +48,7 @@ net.save()
 print("training decoders")
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(100):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     dv = net.forward_v(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -68,10 +73,6 @@ for epoch in range(10):  # loop over the dataset multiple times
 
 net.save()
 
-# validation data
-data1, _ = load_dataset(5,5)
-N_data1 = np.shape(data1)[0]
-inputs_11, inputs_21, inputs_img1, labels1 = parse_data(data1)
 
 # training set
 print("training planner")
@@ -79,7 +80,7 @@ criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 losses_test, losses_val = ([], [])
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(100):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())

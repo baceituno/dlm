@@ -26,12 +26,14 @@ inputs_11, inputs_21, inputs_img1, labels1 = parse_data(data1)
 
 # define network
 net = Net(N_data)
-net.load()
-net.eval()
+# net.load()
+# net.eval()
 
 print("training end-to-end")
+criterion = torch.nn.MSELoss(reduction='mean')
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 losses_test, losses_val = ([], [])
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -55,20 +57,21 @@ for epoch in range(100):  # loop over the dataset multiple times
 plt.figure(1)
 plt.plot(losses_test,color="b")
 plt.plot(losses_val,color="r")
-plt.show()
+plt.show(block=False)
+plt.savefig('f1.png')
 
 # resets the network
 net = Net(N_data)
-net.load()
-net.eval()
+# net.load()
+# net.eval()
 
 print("training autoencoder")
 optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
-    outputs, mu, logvar = net.forward_vae(inputs_img.float())
-    loss = loss_fn(outputs, inputs_img.float(), mu, logvar)
+    outputs, mu, logvar = net.forwardShapeVAE(inputs_img.float())
+    loss = LossShapeVAE(outputs, inputs_img.float(), mu, logvar)
     loss.backward()
     optimizer.step()
     
@@ -79,7 +82,7 @@ for epoch in range(100):  # loop over the dataset multiple times
 print("training decoders")
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     dv = net.forward_v(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -108,7 +111,7 @@ criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 losses_test, losses_val = ([], [])
 
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -129,23 +132,24 @@ for epoch in range(100):  # loop over the dataset multiple times
     print("Valid. loss at epoch ",epoch," = ",loss_t)
 
 # plots training progress
-plt.figure(1)
+plt.figure(2)
 plt.plot(losses_test,color="b")
 plt.plot(losses_val,color="r")
-plt.show()
+plt.show(block=False)
+plt.savefig('f2.png')
 
 # resets the network
 net = Net(N_data)
-net.load()
-net.eval()
+# net.load()
+# net.eval()
 
 print("training autoencoder")
 optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs, mu, logvar = net.forward_vae(inputs_img.float())
-    loss = loss_fn(outputs, inputs_img.float(), mu, logvar)
+    loss = LossShapeVAE(outputs, inputs_img.float(), mu, logvar)
     loss.backward()
     optimizer.step()
     
@@ -156,7 +160,7 @@ for epoch in range(100):  # loop over the dataset multiple times
 print("training decoders")
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     dv = net.forward_v(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -185,7 +189,7 @@ criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 losses_test, losses_val = ([], [])
 
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward_noenc(inputs_1.float(),inputs_2.float(),inputs_img.float())
@@ -206,7 +210,8 @@ for epoch in range(100):  # loop over the dataset multiple times
     print("Valid. loss at epoch ",epoch," = ",loss_t)
 
 # plots training progress
-plt.figure(1)
+plt.figure(3)
 plt.plot(losses_test,color="b")
 plt.plot(losses_val,color="r")
-plt.show()
+plt.show(block=False)
+plt.savefig('f3.png')
