@@ -19,8 +19,8 @@ def parse_data(data, img_dim = 2500, extra_zeros = 160):
 	inputs_1 = torch.tensor(data[:,:45]) # object trajectory
 	inputs_2 = torch.tensor(data[:,45:205]) # trajectory decoding
 	inputs_img = torch.tensor(data[:,205:205+img_dim]) # object shape
-	SDF_edes = torch.tensor(data[:,205+img_dim:205+2*img_dim]) # object shape
+	SDF = torch.tensor(data[:,205+img_dim:205+2*img_dim]) # object shape
 	N_data = np.shape(data)[0]
 	labels = torch.cat((330*torch.tensor(data[:,205+2*img_dim:]),torch.tensor(np.zeros((N_data,extra_zeros)))), axis = 1)
 
-	return inputs_1, inputs_2, inputs_img, labels
+	return inputs_1, inputs_2, inputs_img, SDF, labels

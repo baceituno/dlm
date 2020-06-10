@@ -95,3 +95,76 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, epochs = 10):
 		loss_t = loss.item()
 
 		print("FCe decoder loss at epoch ",epoch," = ",loss_t)
+
+class LossShapeSDF(torch.autograd.Function):  
+	@staticmethod
+	def forward(ctx, v, sdf, xtraj):
+		ctx.save_for_backward(v, sdf, xtraj)
+		r = xtraj[0:15].view(3,5)
+
+		# starts with zero
+		loss = 0
+		posdiff = np.array((0.05),(0.05));
+		scalediff = 500;
+
+		for t in range(5):
+			# rotation matrix
+			p = r[0:2,t]
+			th = r[2,t]
+			c, s = np.cos(th), np.sin(th)
+			rmat = np.array(((c, s), (-s, c)))
+
+			for c in range(2):
+				# reprojects for each finger
+				v1 = np.array((v[c*2,t]),(v[c*2+2,t])) - p
+				v2 = np.array((v[c*2+1,t]),(v[c*2+3,t])) - p
+				v1 = rmat@v1
+				v2 = rmat@v2
+
+				# rescales for each finger and sends to pixel space
+				v1 = np.around(scalediff*v1 + scalediff*posdiff)
+				v2 = np.around(scalediff*v2 + scalediff*posdiff)
+
+				# loss function computation
+				loss += sdf[v1[1],v1[0]] 
+				loss += sdf[v2[1],v2[0]]
+
+		return loss
+
+	@staticmethod
+	def backward(ctx, grad_output):
+		v, sdf, xtraj = ctx.saved_tensors
+
+		r = xtraj[0:15].view(3,5)
+
+		# starts with zero
+		loss = 0
+		posdiff = np.array((0.05),(0.05));
+		scalediff = 500;
+
+		grad_input = grad_output.clone()
+		grad_input = 0.0
+
+		for t in range(5):
+			# rotation matrix
+			p = r[0:2,t]
+			th = r[2,t]
+			c, s = np.cos(th), np.sin(th)
+			rmat = np.array(((c, s), (-s, c)))
+
+			for c in range(2):
+				# reprojects for each finger
+				v1 = np.array((v[c*2,t]),(v[c*2+2,t])) - p
+				v2 = np.array((v[c*2+1,t]),(v[c*2+3,t])) - p
+				v1 = rmat@v1
+				v2 = rmat@v2
+
+				# rescales for each finger and sends to pixel space
+				v1 = np.around(scalediff*v1 + scalediff*posdiff)
+				v2 = np.around(scalediff*v2 + scalediff*posdiff)
+
+				# loss function computation
+				grad_input -= sdf[v1[1],v1[0]]
+				grad_input -= sdf[v2[1],v2[0]]
+
+		return grad_input, None
