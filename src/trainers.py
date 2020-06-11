@@ -47,7 +47,7 @@ def TrainShapeVAE(net, inputs_img, epochs = 10):
 
 		print("Shape Autoencoder loss at epoch ",epoch," = ",loss_t)
 
-def TrainDecoders(net, inputs_1, inputs_2, inputs_img, epochs = 10):
+def TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10):
 	N_data = np.shape(inputs_1)[0]
 	criterion = torch.nn.MSELoss(reduction='mean')
 	optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -59,6 +59,7 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, epochs = 10):
 		loss.backward()
 		optimizer.step()
 		
+
 		loss_t = loss.item()
 
 		print("Vertex decoder loss at epoch ",epoch," = ",loss_t)
@@ -96,75 +97,112 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, epochs = 10):
 
 		print("FCe decoder loss at epoch ",epoch," = ",loss_t)
 
+	for epoch in range(epochs):  # loop over the dataset multiple times
+		loss_t = 0
+		optimizer.zero_grad()
+		v = net.forward_v_sdf(inputs_1.float(),inputs_2.float(),inputs_img.float())
+		loss = LossShapeSDF().apply(v.float(), inputs_sdf.float(), inputs_1.float())
+		loss.backward()
+		optimizer.step()
+		
+		loss_t = loss.item()
+
+		print("V SDF decoder loss at epoch ",epoch," = ",loss_t)
+
 class LossShapeSDF(torch.autograd.Function):  
 	@staticmethod
 	def forward(ctx, v, sdf, xtraj):
 		ctx.save_for_backward(v, sdf, xtraj)
-		r = xtraj[0:15].view(3,5)
+		r = xtraj[:,0:15].view(-1,3,5)
+		v = v.view(-1,8,5)
+		sdf = sdf.view(-1,50,50)
 
 		# starts with zero
 		loss = 0
-		posdiff = np.array((0.05),(0.05));
+		posdiff = np.array([[0.05],[0.05]]);
 		scalediff = 500;
+		for i in range(np.shape(v)[0]):
+			for t in range(5):
+				# rotation matrix
+				p = r[i,0:2,t]
+				th = r[i,2,t]
+				c, s = np.cos(th), np.sin(th)
+				rmat = torch.tensor(np.array(((c, s), (-s, c))))
 
-		for t in range(5):
-			# rotation matrix
-			p = r[0:2,t]
-			th = r[2,t]
-			c, s = np.cos(th), np.sin(th)
-			rmat = np.array(((c, s), (-s, c)))
+				for c in range(2):
+					# reprojects for each finger
+					v1 = torch.tensor([[v[i,c*2,t]],[v[i,c*2+2,t]]]) - p.view(2,1)
+					v2 = torch.tensor([[v[i,c*2+1,t]],[v[i,c*2+3,t]]]) - p.view(2,1)
 
-			for c in range(2):
-				# reprojects for each finger
-				v1 = np.array((v[c*2,t]),(v[c*2+2,t])) - p
-				v2 = np.array((v[c*2+1,t]),(v[c*2+3,t])) - p
-				v1 = rmat@v1
-				v2 = rmat@v2
+					v1 = torch.matmul(rmat,v1)
+					v2 = torch.matmul(rmat,v2)
 
-				# rescales for each finger and sends to pixel space
-				v1 = np.around(scalediff*v1 + scalediff*posdiff)
-				v2 = np.around(scalediff*v2 + scalediff*posdiff)
+					# rescales for each finger and sends to pixel space
+					v1 = np.around(scalediff*v1 + scalediff*posdiff)
+					v2 = np.around(scalediff*v2 + scalediff*posdiff)
 
-				# loss function computation
-				loss += sdf[v1[1],v1[0]] 
-				loss += sdf[v2[1],v2[0]]
-
-		return loss
+					# loss function computation
+					loss += sdf[i,np.min([np.max([v1[0],0]),49]).astype(int),np.min([np.max([v1[1],0]),49]).astype(int)] 
+					loss += sdf[i,np.min([np.max([v2[0],0]),49]).astype(int),np.min([np.max([v2[1],0]),49]).astype(int)]
+		return loss/np.shape(v)[0]
 
 	@staticmethod
 	def backward(ctx, grad_output):
 		v, sdf, xtraj = ctx.saved_tensors
 
-		r = xtraj[0:15].view(3,5)
+		r = xtraj[:,0:15].view(-1,3,5)
+		v = v.view(-1,8,5)
+		sdf = sdf.view(-1,50,50)
 
 		# starts with zero
-		loss = 0
-		posdiff = np.array((0.05),(0.05));
+		grad_input = np.zeros((200,40))
+		posdiff = np.array([[0.05],[0.05]]);
 		scalediff = 500;
+		for i in range(np.shape(v)[0]):
+			grad_t = np.zeros((8,5))
+			for t in range(5):
+				# rotation matrix
+				p = r[i,0:2,t]
+				th = r[i,2,t]
+				c, s = np.cos(th), np.sin(th)
+				rmat = torch.tensor(np.array(((c, s), (-s, c))))
 
-		grad_input = grad_output.clone()
-		grad_input = 0.0
+				for c in range(2):
+					# reprojects for each finger
+					v1 = torch.tensor([[v[i,c*2+0,t]],[v[i,c*2+2,t]]]) - p.view(2,1)
+					v2 = torch.tensor([[v[i,c*2+1,t]],[v[i,c*2+3,t]]]) - p.view(2,1)
 
-		for t in range(5):
-			# rotation matrix
-			p = r[0:2,t]
-			th = r[2,t]
-			c, s = np.cos(th), np.sin(th)
-			rmat = np.array(((c, s), (-s, c)))
+					v1 = torch.matmul(rmat,v1)
+					v2 = torch.matmul(rmat,v2)
 
-			for c in range(2):
-				# reprojects for each finger
-				v1 = np.array((v[c*2,t]),(v[c*2+2,t])) - p
-				v2 = np.array((v[c*2+1,t]),(v[c*2+3,t])) - p
-				v1 = rmat@v1
-				v2 = rmat@v2
+					# rescales for each finger and sends to pixel space
+					v1 = np.around(scalediff*v1 + scalediff*posdiff)
+					v2 = np.around(scalediff*v2 + scalediff*posdiff)
 
-				# rescales for each finger and sends to pixel space
-				v1 = np.around(scalediff*v1 + scalediff*posdiff)
-				v2 = np.around(scalediff*v2 + scalediff*posdiff)
+					# for v1
+					x1 = sdf[i,np.min([np.max([v1[0]-1,0]),47]).astype(int),np.min([np.max([v1[1],1]),49]).astype(int)].numpy()
+					x2 = sdf[i,np.min([np.max([v1[0]+1,2]),49]).astype(int),np.min([np.max([v1[1],1]),49]).astype(int)].numpy()
 
-				# loss function computation
-				grad_input -= sdf[v1[1],v1[0]]
-				grad_input -= sdf[v2[1],v2[0]]
+					y1 = sdf[i,np.min([np.max([v1[0],1]),49]).astype(int),np.min([np.max([v1[1]-1,0]),47]).astype(int)].numpy()
+					y2 = sdf[i,np.min([np.max([v1[0],1]),49]).astype(int),np.min([np.max([v1[1]+1,2]),49]).astype(int)].numpy()
 
-		return grad_input, None
+					dsdv1 = np.array([[x2-x1],[y2-y1]])/2
+
+					grad_t[c*2+0,t] = dsdv1[0]
+					grad_t[c*2+2,t] = dsdv1[1]
+
+					# for v2
+					x1 = sdf[i,np.min([np.max([v2[0]-1,0]),47]).astype(int),np.min([np.max([v2[1],0]),49]).astype(int)].numpy()
+					x2 = sdf[i,np.min([np.max([v2[0]+1,2]),49]).astype(int),np.min([np.max([v2[1],0]),49]).astype(int)].numpy()
+
+					y1 = sdf[i,np.min([np.max([v2[0],0]),49]).astype(int),np.min([np.max([v2[1]-1,0]),47]).astype(int)].numpy()
+					y2 = sdf[i,np.min([np.max([v2[0],0]),49]).astype(int),np.min([np.max([v2[1]+1,2]),49]).astype(int)].numpy()
+
+					dsdv2 = np.array([[x2-x1],[y2-y1]])/2
+
+					grad_t[c*2+1,t] = dsdv2[0]
+					grad_t[c*2+3,t] = dsdv2[1]
+			# gradient computation
+			grad_input[i,:] = grad_t.reshape((1,40))
+
+		return torch.tensor(grad_input), None, None

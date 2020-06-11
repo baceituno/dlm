@@ -433,6 +433,23 @@ class Net(torch.nn.Module):
 				y = torch.cat((y, y_1), axis = 0)
 		return y
 
+	def forward_v_sdf(self, xtraj, x, x_img):
+		# encodes shape
+		e_img = self.forwardShapeEncoder(np.reshape(x_img,(-1,1,50,50)))
+		first = True
+		# decodes each trajectory
+		for i in range(np.shape(x)[0]):
+			# learnes the vertices parameters
+			v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+
+			if first:				
+				y = v.view(1,-1)
+				first = False
+			else:
+				y_1 = v.view(1,-1)
+				y = torch.cat((y, y_1), axis = 0)
+		return y
+
 	def forward_p(self, xtraj, x, x_img):
 		# encodes shape
 		e_img = self.forwardShapeEncoder(np.reshape(x_img,(-1,1,50,50)))
