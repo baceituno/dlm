@@ -36,7 +36,7 @@ print(np.shape(data1))
 # define network
 print("Setting up network...")
 net = Net(N_data)
-net.load()
+# net.load()
 
 net.eval()
 
@@ -45,7 +45,7 @@ TrainShapeVAE(net, inputs_img.float(), epochs = 10)
 net.save()
 
 print("training decoders")
-TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 100)
+TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10)
 net.save()
 
 # training set
@@ -54,16 +54,17 @@ criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 losses_test, losses_val = ([], [])
 
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(10):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
     loss = criterion(outputs, labels.float())
+    loss_t = loss.item()
+    # v = net.forward_v_sdf(inputs_1.float(),inputs_2.float(),inputs_img.float())
+    # loss = loss + LossShapeSDF().apply(v.float(), inputs_sdf.float(), inputs_1.float())
     loss.backward()
     optimizer.step()
-    
     loss_t = loss.item()
-
     losses_test.append(loss_t)
     print("Train loss at epoch ",epoch," = ",loss_t)
 
@@ -73,6 +74,7 @@ for epoch in range(100):  # loop over the dataset multiple times
 
     losses_val.append(loss_t)
     print("Valid. loss at epoch ",epoch," = ",loss_t)
+
 
 print('saving results...')
 

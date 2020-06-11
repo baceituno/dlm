@@ -131,8 +131,8 @@ class LossShapeSDF(torch.autograd.Function):
 
 				for c in range(2):
 					# reprojects for each finger
-					v1 = torch.tensor([[v[i,c*2,t]],[v[i,c*2+2,t]]]) - p.view(2,1)
-					v2 = torch.tensor([[v[i,c*2+1,t]],[v[i,c*2+3,t]]]) - p.view(2,1)
+					v1 = torch.tensor([[v[i,c*4,t]],[v[i,c*4+2,t]]]) - p.view(2,1)
+					v2 = torch.tensor([[v[i,c*4+1,t]],[v[i,c*4+3,t]]]) - p.view(2,1)
 
 					v1 = torch.matmul(rmat,v1)
 					v2 = torch.matmul(rmat,v2)
@@ -155,7 +155,7 @@ class LossShapeSDF(torch.autograd.Function):
 		sdf = sdf.view(-1,50,50)
 
 		# starts with zero
-		grad_input = np.zeros((200,40))
+		grad_input = np.zeros((np.shape(v)[0],40))
 		posdiff = np.array([[0.05],[0.05]]);
 		scalediff = 500;
 		for i in range(np.shape(v)[0]):
@@ -169,8 +169,8 @@ class LossShapeSDF(torch.autograd.Function):
 
 				for c in range(2):
 					# reprojects for each finger
-					v1 = torch.tensor([[v[i,c*2+0,t]],[v[i,c*2+2,t]]]) - p.view(2,1)
-					v2 = torch.tensor([[v[i,c*2+1,t]],[v[i,c*2+3,t]]]) - p.view(2,1)
+					v1 = torch.tensor([[v[i,c*4+0,t]],[v[i,c*4+2,t]]]) - p.view(2,1)
+					v2 = torch.tensor([[v[i,c*4+1,t]],[v[i,c*4+3,t]]]) - p.view(2,1)
 
 					v1 = torch.matmul(rmat,v1)
 					v2 = torch.matmul(rmat,v2)

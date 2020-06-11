@@ -129,6 +129,8 @@ class Net(torch.nn.Module):
 		self.fc_dec.add_module("relu_1200", torch.nn.ReLU())
 		self.fc_dec.add_module("fc12000", torch.nn.Linear(200, 200))
 		self.fc_dec.add_module("relu_12000", torch.nn.ReLU())
+		self.fc_dec.add_module("fc120000", torch.nn.Linear(200, 200))
+		self.fc_dec.add_module("relu_120000", torch.nn.ReLU())
 		self.fc_dec.add_module("fc12001", torch.nn.Linear(200, 40))
 
 		# p_e decoder
@@ -232,8 +234,8 @@ class Net(torch.nn.Module):
 
 			# constraints contacts to their respective facets
 			for c in range(self.N_c):
-				constraints.append(p[c,t] == alpha1[c,t]*v[c*self.N_c,t] + alpha2[c,t]*v[c*self.N_c+2,t])
-				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*self.N_c+1,t] + alpha2[c,t]*v[c*self.N_c+3,t])
+				constraints.append(p[c,t] == alpha1[c,t]*v[c*self.N_c*2,t] + alpha2[c,t]*v[c*self.N_c*2+2,t])
+				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*self.N_c*2+1,t] + alpha2[c,t]*v[c*self.N_c*2+3,t])
 				constraints.append(alpha1[c,t] + alpha2[c,t] == 1)
 				constraints.append(alpha1[c,t] >= 0)
 				constraints.append(alpha2[c,t] >= 0)
@@ -243,8 +245,8 @@ class Net(torch.nn.Module):
 
 			# friction cone constraints
 			for c in range(self.N_c):
-				constraints.append(gamma[c,t]*fc[c*self.N_c,t] + gamma[c + self.N_c,t]*fc[c*self.N_c + 2,t] == f[c,t])
-				constraints.append(gamma[c,t]*fc[c*self.N_c + 1,t] + gamma[c + self.N_c,t]*fc[c*self.N_c + 3,t] == f[self.N_c + c,t])
+				constraints.append(gamma[c,t]*fc[c*self.N_c*2,t] + gamma[c + self.N_c,t]*fc[c*self.N_c*2 + 2,t] == f[c,t])
+				constraints.append(gamma[c,t]*fc[c*self.N_c*2 + 1,t] + gamma[c + self.N_c,t]*fc[c*self.N_c*2 + 3,t] == f[self.N_c + c,t])
 				constraints.append(gamma[c,t] >= 0)
 				constraints.append(gamma[self.N_c + c,t] >= 0)
 			
