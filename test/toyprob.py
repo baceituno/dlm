@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 print("loading training data...")
 # loads the training data
-data, _ = load_dataset(1,4)
+data, _ = load_dataset(1,4) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, inputs_sdf, labels = parse_data(data)
@@ -35,36 +35,32 @@ print(np.shape(data1))
 
 # define network
 print("Setting up network...")
-net = Net(N_data)
-# net.load()
-
+net = ContactNet(N_data)
+net.load()
 net.eval()
 
-print("training autoencoder")
-TrainShapeVAE(net, inputs_img.float(), epochs = 10)
-net.save()
+# print("training autoencoder")
+# TrainShapeVAE(net, inputs_img.float(), epochs = 1000)
+# net.save()
 
-print("training decoders")
-TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10)
-net.save()
+# # print("training decoders")
+# TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 1000)
+# net.save()
 
 # training set
 print("training planner")
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.Adam(net.parameters(), lr=0.001)
 losses_test, losses_val = ([], [])
 
-for epoch in range(10):  # loop over the dataset multiple times
+for epoch in range(200):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
     loss = criterion(outputs, labels.float())
     loss_t = loss.item()
-    # v = net.forward_v_sdf(inputs_1.float(),inputs_2.float(),inputs_img.float())
-    # loss = loss + LossShapeSDF().apply(v.float(), inputs_sdf.float(), inputs_1.float())
     loss.backward()
     optimizer.step()
-    loss_t = loss.item()
     losses_test.append(loss_t)
     print("Train loss at epoch ",epoch," = ",loss_t)
 

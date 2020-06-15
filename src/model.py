@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 
-class Net(torch.nn.Module):
+class ContactNet(torch.nn.Module):
 	def __init__(self, N_data):
-		super(Net, self).__init__()
+		super(ContactNet, self).__init__()
 		# contact-trajectory parameters 
 		self.N_c = 2
 		self.T = 5
@@ -113,6 +113,8 @@ class Net(torch.nn.Module):
 		self.v_dec.add_module("relu_8", torch.nn.ReLU())
 		self.v_dec.add_module("fc9", torch.nn.Linear(200, 200))
 		self.v_dec.add_module("relu_9", torch.nn.ReLU())
+		self.v_dec.add_module("fc91", torch.nn.Linear(200, 200))
+		self.v_dec.add_module("relu_91", torch.nn.ReLU())
 		self.v_dec.add_module("fc90", torch.nn.Linear(200, 40))
 
 		# fc decoder
@@ -129,8 +131,6 @@ class Net(torch.nn.Module):
 		self.fc_dec.add_module("relu_1200", torch.nn.ReLU())
 		self.fc_dec.add_module("fc12000", torch.nn.Linear(200, 200))
 		self.fc_dec.add_module("relu_12000", torch.nn.ReLU())
-		self.fc_dec.add_module("fc120000", torch.nn.Linear(200, 200))
-		self.fc_dec.add_module("relu_120000", torch.nn.ReLU())
 		self.fc_dec.add_module("fc12001", torch.nn.Linear(200, 40))
 
 		# p_e decoder
@@ -234,8 +234,8 @@ class Net(torch.nn.Module):
 
 			# constraints contacts to their respective facets
 			for c in range(self.N_c):
-				constraints.append(p[c,t] == alpha1[c,t]*v[c*self.N_c*2,t] + alpha2[c,t]*v[c*self.N_c*2+2,t])
-				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*self.N_c*2+1,t] + alpha2[c,t]*v[c*self.N_c*2+3,t])
+				constraints.append(p[c,t] == alpha1[c,t]*v[c*self.N_c*2,t] + alpha2[c,t]*v[c*self.N_c*2 + 2,t])
+				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*self.N_c*2 + 1,t] + alpha2[c,t]*v[c*self.N_c*2 + 3,t])
 				constraints.append(alpha1[c,t] + alpha2[c,t] == 1)
 				constraints.append(alpha1[c,t] >= 0)
 				constraints.append(alpha2[c,t] >= 0)
@@ -261,7 +261,7 @@ class Net(torch.nn.Module):
 			constraints.append(gamma_e[2,t] >= 0)
 			constraints.append(gamma_e[3,t] >= 0)
 
-		objective = cp.Minimize(cp.pnorm(f_e, p=2))
+		objective = cp.Minimize(cp.pnorm(f, p=2))
 		problem = cp.Problem(objective, constraints)
 		
 		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e])
@@ -336,7 +336,9 @@ class Net(torch.nn.Module):
 			# fc = fc0
 			# fc_e = fc_e0
 
-			p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+			p, f, _, _, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+
+			# p = p_r0
 
 			# autoencoding errors set to zero for now
 			dp = (p_r0 - p_r0)
@@ -344,6 +346,14 @@ class Net(torch.nn.Module):
 			dfc = (fc0 - fc0)
 			dpe = (p_e0 - p_e0)
 			dfce = (fc_e0 - fc_e0)
+
+			# print('\n \n \n')
+
+			# print(ddr.view(3,5))
+			# print(f)
+			# print(f_e)
+
+			# print('\n \n \n')
 			
 			if first:				
 				y = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
@@ -386,12 +396,12 @@ class Net(torch.nn.Module):
 			# p_r = p_r0
 			# p_e = p_e0
 			# v = v0
-			# fc = fc0
-			# fc_e = fc_e0
+			fc = fc0
+			fc_e = fc_e0
 
 			# detaches the pre-trained
-			p_r.detach()
-			v.detach()
+			# p_r.detach()
+			# v.detach()
 
 			p, f, _ ,_, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
 
@@ -402,17 +412,19 @@ class Net(torch.nn.Module):
 			# dpe = p_e - p_e0
 			# dfce = fc_e - fc_e0
 
+			p = p_r0.view(4,5)
+
 			dp = (p_r0 - p_r0)
 			dv = (v0 - v0)
 			dfc = (fc0 - fc0)
 			dpe = (p_e0 - p_e0)
 			dfce = (fc_e0 - fc_e0)
 			
-			if first:				
-				y = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
+			if first:		
+				y = torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
 				first = False
 			else:
-				y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
+				y_1 = torch.cat([p.view(1,-1), f.view(1,-1), dp.view(1,-1), dv.view(1,-1), dfc.view(1,-1), dpe.view(1,-1), dfce.view(1,-1)], axis = 1)
 				y = torch.cat((y, y_1), axis = 0)
 		return y
 
@@ -443,7 +455,7 @@ class Net(torch.nn.Module):
 		for i in range(np.shape(x)[0]):
 			# learnes the vertices parameters
 			v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
-
+			v = x[i,120:160] # contact affordance
 			if first:				
 				y = v.view(1,-1)
 				first = False
@@ -484,10 +496,10 @@ class Net(torch.nn.Module):
 			dp = fc - fc0
 			
 			if first:				
-				y = 1000*dp.view(1,-1)
+				y = 100*dp.view(1,-1)
 				first = False
 			else:
-				y_1 = 1000*dp.view(1,-1)
+				y_1 = 100*dp.view(1,-1)
 				y = torch.cat((y, y_1), axis = 0)
 		return y
 
@@ -504,10 +516,10 @@ class Net(torch.nn.Module):
 			dp = fc - fc0
 			
 			if first:				
-				y = 1000*dp.view(1,-1)
+				y = 100*dp.view(1,-1)
 				first = False
 			else:
-				y_1 = 1000*dp.view(1,-1)
+				y_1 = 100*dp.view(1,-1)
 				y = torch.cat((y, y_1), axis = 0)
 		return y
 

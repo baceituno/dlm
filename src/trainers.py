@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 import torch.optim as optim
+import time
 
 def LossShapeVAE(recon_x, x, mu, logvar):
 	x = np.reshape(x,(-1,1,50,50))
@@ -59,7 +60,6 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10):
 		loss.backward()
 		optimizer.step()
 		
-
 		loss_t = loss.item()
 
 		print("Vertex decoder loss at epoch ",epoch," = ",loss_t)
@@ -97,18 +97,6 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10):
 
 		print("FCe decoder loss at epoch ",epoch," = ",loss_t)
 
-	for epoch in range(epochs):  # loop over the dataset multiple times
-		loss_t = 0
-		optimizer.zero_grad()
-		v = net.forward_v_sdf(inputs_1.float(),inputs_2.float(),inputs_img.float())
-		loss = LossShapeSDF().apply(v.float(), inputs_sdf.float(), inputs_1.float())
-		loss.backward()
-		optimizer.step()
-		
-		loss_t = loss.item()
-
-		print("V SDF decoder loss at epoch ",epoch," = ",loss_t)
-
 class LossShapeSDF(torch.autograd.Function):  
 	@staticmethod
 	def forward(ctx, v, sdf, xtraj):
@@ -131,19 +119,32 @@ class LossShapeSDF(torch.autograd.Function):
 
 				for c in range(2):
 					# reprojects for each finger
-					v1 = torch.tensor([[v[i,c*4,t]],[v[i,c*4+2,t]]]) - p.view(2,1)
-					v2 = torch.tensor([[v[i,c*4+1,t]],[v[i,c*4+3,t]]]) - p.view(2,1)
+					print(p.view(2,1))
 
-					v1 = torch.matmul(rmat,v1)
-					v2 = torch.matmul(rmat,v2)
+					v1 = torch.tensor([[v[i,c*4,t]],[v[i,c*4+2,t]]])
+					v2 = torch.tensor([[v[i,c*4+1,t]],[v[i,c*4+3,t]]])
+
+					print(v1)
+					print(v2)
+
+					v1 = torch.matmul(rmat,v1 - p.view(2,1)) + posdiff
+					v2 = torch.matmul(rmat,v2 - p.view(2,1)) + posdiff
+
+
+					print(v1)
+					print(v2)
 
 					# rescales for each finger and sends to pixel space
-					v1 = np.around(scalediff*v1 + scalediff*posdiff)
-					v2 = np.around(scalediff*v2 + scalediff*posdiff)
+					v1 = np.around(scalediff*v1)
+					v2 = np.around(scalediff*v2)
+
+					print(v1)
+					print(v2)
+					time.sleep(5)
 
 					# loss function computation
-					loss += sdf[i,np.min([np.max([v1[0],0]),49]).astype(int),np.min([np.max([v1[1],0]),49]).astype(int)] 
-					loss += sdf[i,np.min([np.max([v2[0],0]),49]).astype(int),np.min([np.max([v2[1],0]),49]).astype(int)]
+					loss += sdf[i,np.min([np.max([v1[0],0]),49]).astype(int),np.min([np.max([49-v1[1],0]),49]).astype(int)] 
+					loss += sdf[i,np.min([np.max([v2[0],0]),49]).astype(int),np.min([np.max([49-v2[1],0]),49]).astype(int)]
 		return loss/np.shape(v)[0]
 
 	@staticmethod
