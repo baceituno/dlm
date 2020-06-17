@@ -53,7 +53,7 @@ criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.001)
 losses_test, losses_val = ([], [])
 
-for epoch in range(200):  # loop over the dataset multiple times
+for epoch in range(500):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
     outputs = net.forward(inputs_1.float(),inputs_2.float(),inputs_img.float())
