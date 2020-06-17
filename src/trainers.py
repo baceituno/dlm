@@ -6,21 +6,21 @@ import time
 
 def LossShapeVAE(recon_x, x, mu, logvar):
 	x = np.reshape(x,(-1,1,50,50))
-	BCE = F.mse_loss(recon_x, x, size_average=False)
+	BCE = F.mse_loss(recon_x, x, size_average=True)
 	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 	return BCE + KLD
 
 def LossFrameVAE(recon_x, x, mu, logvar):
 	x = np.reshape(x,(-1,3,50,50))
-	BCE = F.mse_loss(recon_x, x, size_average=False)
+	BCE = F.mse_loss(recon_x, x, size_average=True)
 	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-	return BCE + KLD
+	return 100*BCE + KLD
 
-def TrainVideoVAE(net, vids, T, epochs = 10):
+def TrainVideoVAE(net, vids, epochs = 10):
 	optimizer = optim.Adam(net.parameters(), lr=0.001)
-	for epochs in range(epochs):
+	for epoch in range(epochs):
 		# trains for each times-step
-		for j in range(T):
+		for j in range(net.T):
 			loss_t = 0
 			optimizer.zero_grad()
 			frame = torch.tensor(vids[:,j*7500:(j+1)*7500])
@@ -29,9 +29,31 @@ def TrainVideoVAE(net, vids, T, epochs = 10):
 			loss.backward()
 			optimizer.step()
 			
-			loss_t = loss.item()
-			print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
+		loss_t = loss.item()
+		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
 
+def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10):
+	optimizer = optim.Adam(net.parameters(), lr=0.001)
+	for epoch in range(epochs):
+		loss_t = 0
+		optimizer.zero_grad()
+		traj_rec = net.forwardVideotoTraj(torch.tensor(vids).float())
+		loss = 50*F.mse_loss(traj_rec, xtraj.float(), size_average=True)
+		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
+
+		print("Traj. Reconstruction loss at epoch ",epoch," = ",loss_t)
+
+		loss_t = 0
+		optimizer.zero_grad()
+		img_rec = net.forwardVideotoImage(torch.tensor(vids).float())
+		loss = 10*F.mse_loss(img_rec, x_img.float().view(-1,1,50,50), size_average=True)
+		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
+			
+		print("Image Reconstruction loss at epoch ",epoch," = ",loss_t)
 
 def TrainShapeVAE(net, inputs_img, epochs = 10):
 	# Trans the shape VAE
@@ -97,7 +119,7 @@ def TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 10):
 
 		print("FCe decoder loss at epoch ",epoch," = ",loss_t)
 
-class LossShapeSDF(torch.autograd.Function):  
+class LossShapeSDF(torch.autograd.Function):
 	@staticmethod
 	def forward(ctx, v, sdf, xtraj):
 		ctx.save_for_backward(v, sdf, xtraj)

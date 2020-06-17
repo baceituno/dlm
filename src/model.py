@@ -62,26 +62,43 @@ class ContactNet(torch.nn.Module):
 	def addFrameVAELayers(self):
 		# frame encoder
 		self.vid_enc = torch.nn.Sequential()
-		self.vid_enc.add_module("vid_conv_1", torch.nn.Conv2d(3, 30, kernel_size=11))
+		self.vid_enc.add_module("vid_conv_1", torch.nn.Conv2d(3, 30, kernel_size=5))
 		self.vid_enc.add_module("vid_pool_1", torch.nn.MaxPool2d(kernel_size=2))
 		self.vid_enc.add_module("vid_relu_1", torch.nn.ReLU())
 		self.vid_enc.add_module("vid_conv_2", torch.nn.Conv2d(30, 60, kernel_size=5))
-		self.vid_enc.add_module("vid_pool_2", torch.nn.MaxPool2d(kernel_size=4))
+		self.vid_enc.add_module("vid_pool_2", torch.nn.MaxPool2d(kernel_size=2))
 		self.vid_enc.add_module("vid_relu_2", torch.nn.ReLU())
+		self.vid_enc.add_module("vid_conv_3", torch.nn.Conv2d(60, 120, kernel_size=5))
+		self.vid_enc.add_module("vid_pool_3", torch.nn.MaxPool2d(kernel_size=2))
+		self.vid_enc.add_module("vid_relu_3", torch.nn.ReLU())
 		self.vid_enc.add_module("vid_flatten", torch.nn.Flatten())
-		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(960,320))
+		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(480,480))
+		self.vid_enc.add_module("vid_relu_4", torch.nn.ReLU())
+		self.vid_enc.add_module("vid_fc_enc1", torch.nn.Linear(480,480))
+		self.vid_enc.add_module("vid_relu_5", torch.nn.ReLU())
+		self.vid_enc.add_module("vid_fc_enc2", torch.nn.Linear(480,480))
 
 		# layers for frame VAE
-		self.vid_fc1 = torch.nn.Linear(320, 320)
-		self.vid_fc2 = torch.nn.Linear(320, 320)
-		self.vid_fc3 = torch.nn.Linear(320, 960)
+		self.vid_fc1 = torch.nn.Linear(480, 320)
+		self.vid_fc2 = torch.nn.Linear(480, 320)
+		self.vid_fc3 = torch.nn.Linear(320, 480)
+
+		self.vid_dec0 = torch.nn.Sequential()
+		self.vid_dec0.add_module("vid_fc_dec", torch.nn.Linear(480,480))
+		self.vid_dec0.add_module("vid_relu_dec1", torch.nn.ReLU())
+		self.vid_dec0.add_module("vid_fc_dec1", torch.nn.Linear(480,480))
+		self.vid_dec0.add_module("vid_relu_dec2", torch.nn.ReLU())
+		self.vid_dec0.add_module("vid_fc_dec2", torch.nn.Linear(480,480))
+		self.vid_dec0.add_module("vid_relu_dec3", torch.nn.ReLU())
 
 		# frame decoders
 		self.vid_dec = torch.nn.Sequential()
-		self.vid_dec.add_module("deconv_2", torch.nn.ConvTranspose2d(60, 30, kernel_size=23))
-		self.vid_dec.add_module("derelu_2", torch.nn.ReLU())
-		self.vid_dec.add_module("deconv_1", torch.nn.ConvTranspose2d(30, 3, kernel_size=25))
-		self.vid_dec.add_module("derelu_1", torch.nn.Sigmoid())
+		self.vid_dec.add_module("vdeconv_3", torch.nn.ConvTranspose2d(120, 60, kernel_size=12))
+		self.vid_dec.add_module("vderelu_3", torch.nn.ReLU())
+		self.vid_dec.add_module("vdeconv_2", torch.nn.ConvTranspose2d(60, 30, kernel_size=15))
+		self.vid_dec.add_module("vderelu_2", torch.nn.ReLU())
+		self.vid_dec.add_module("vdeconv_1", torch.nn.ConvTranspose2d(30, 3, kernel_size=24))
+		self.vid_dec.add_module("vderelu_1", torch.nn.Sigmoid())
 
 	def addDecoderLayers(self):
 		# p_r decoder
@@ -177,7 +194,7 @@ class ContactNet(torch.nn.Module):
 		self.traj_dec.add_module("relu_dc_5", torch.nn.ReLU())
 		self.traj_dec.add_module("fc_dc6", torch.nn.Linear(200*self.T, 200*self.T))
 		self.traj_dec.add_module("relu_dc_6", torch.nn.ReLU())
-		self.traj_dec.add_module("fc_dc7", torch.nn.Linear(200*self.T, 3*self.T))
+		self.traj_dec.add_module("fc_dc7", torch.nn.Linear(200*self.T, 9*self.T))
 
 		# decodes the shape of the object
 		self.shap_dec = torch.nn.Sequential()
@@ -189,7 +206,7 @@ class ContactNet(torch.nn.Module):
 		self.shap_dec.add_module("relu_sc_3", torch.nn.ReLU())
 		self.shap_dec.add_module("fc_sc4", torch.nn.Linear(1000*self.T, 100*self.T))
 		self.shap_dec.add_module("relu_sc_4", torch.nn.ReLU())
-		self.shap_dec.add_module("fc_sc5", torch.nn.Linear(100*self.T,320))
+		self.shap_dec.add_module("fc_sc5", torch.nn.Linear(100*self.T,100))
 
 	def setupCTO(self):
 		# decision variables
@@ -363,6 +380,84 @@ class ContactNet(torch.nn.Module):
 				y = torch.cat((y, y_1), axis = 0)
 		return y
 
+	def forwardVideo(self, video): 
+		# passes through the optimization problem
+		# video encoding		
+		first_frame = True
+		for t in range(self.T):
+			frame = video[:,t*7500:(t+1)*7500]
+			e_frame = self.forwardFrameEncoder(frame)
+			if first_frame:
+				e_vid = e_frame
+				first_frame = False
+			else:
+				e_vid = torch.cat((e_vid,e_frame), axis=1)
+		
+		# extracts image encoding and object trajectory
+		e_img = self.shap_dec(e_vid)
+		xtraj = self.traj_dec(e_vid)
+
+		# decodes each trajectory
+		for i in range(np.shape(e_frame)[0]):
+			# params that should be obtained from video
+			r = xtraj[i,:15]
+			# params that can be computed explicity
+			dr = xtraj[i,15:30]
+			ddr = xtraj[i,30:]
+
+			# learnes the parameters
+			# dr, ddr = self.Difflayer(r.view(3,5))
+			p_r = self.p_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+			v = self.v_dec.forward(torch.cat((e_img[i,:].view(1,100), xtraj[i,:].view(1,45)), 1))
+			p_e = self.pe_dec.forward(torch.cat([e_img[i,:].view(1,100), xtraj[i,:].view(1,45)], 1))
+			fc = self.fc_dec.forward(torch.cat([xtraj[i,:].view(1,45), v.view(1,40)], 1))
+			fc_e = self.fce_dec.forward(torch.cat([p_e.view(1,20), xtraj[i,:].view(1,45)], 1))
+
+			# solves for the contact trajectory
+			p, f, _, _, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+
+			
+			if first:				
+				y = 330*torch.cat([p.view(1,-1), f.view(1,-1)], axis = 1)
+				first = False
+			else:
+				y_1 = 330*torch.cat([p.view(1,-1), f.view(1,-1)], axis = 1)
+				y = torch.cat((y, y_1), axis = 0)
+		return y
+	
+	def forwardVideotoImage(self,video):
+		# passes through all frames
+		first_frame = True
+		for t in range(self.T):
+			frame = video[:,t*7500:(t+1)*7500]
+			e_frame = self.forwardFrameEncoder(frame)
+			if first_frame:
+				e_vid = e_frame
+				first_frame = False
+			else:
+				e_vid = torch.cat((e_vid,e_frame), axis=1)
+		
+		# extracts image encoding
+		e_img = self.shap_dec(e_vid)
+
+		# decodes image
+		return self.decoder(self.fc3(e_img).view(-1,20,4,4))
+
+	def forwardVideotoTraj(self,video):
+		# passes through all frames
+		first_frame = True
+		for t in range(self.T):
+			frame = video[:,t*7500:(t+1)*7500]
+			e_frame = self.forwardFrameEncoder(frame)
+			if first_frame:
+				e_vid = e_frame
+				first_frame = False
+			else:
+				e_vid = torch.cat((e_vid,e_frame), axis=1)
+		
+		# extracts object trajecotry
+		return self.traj_dec(e_vid)
+		
 	def forward_noenc(self, xtraj, x, x_img):
 
 		e_img = self.forwardShapeEncoder(np.reshape(x_img,(-1,1,50,50)))
@@ -539,7 +634,8 @@ class ContactNet(torch.nn.Module):
 
 	def forwardFrameVAE(self, x_vid):
 		# encodes
-		h = self.vid_enc(np.reshape(x_vid,(-3,3,50,50)))
+		h = self.vid_enc(np.reshape(x_vid,(-1,3,50,50)))
+
 		# bottlenecks
 		mu, logvar = self.vid_fc1(h), self.vid_fc2(h)
 		std = logvar.mul(0.5).exp_()
@@ -547,9 +643,11 @@ class ContactNet(torch.nn.Module):
 		# reparametrizes
 		z = mu + std * esp
 		z = self.vid_fc3(z)
+		z = self.vid_dec0(z)
 
 		# decodes
-		return self.vid_dec(z.view(-1,60,4,4)), mu, logvar
+		h = self.vid_dec(z.view(-1,120,2,2))
+		return h, mu, logvar
 
 	def forwardShapeEncoder(self, x_img):
 		# encodes
@@ -577,7 +675,7 @@ class ContactNet(torch.nn.Module):
 		z = mu + std * esp
 
 		# encodes
-		return z  
+		return z
 
 	def save(self, name = "cnn_model.pt"):
 		torch.save(self.state_dict(),"../data/models/"+str(name))
