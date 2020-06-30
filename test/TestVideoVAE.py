@@ -27,13 +27,14 @@ print("Setting up network...")
 net = ContactNet(N_data)
 net.addFrameVAELayers()
 net.addVideoLayers()
-net.load()
-net.eval()
+# net.load()
+# net.eval()
 
 
-# print("training video autoencoders")
+print("training video autoencoders")
 TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100)
-TrainVideoParams(net, vids, inputs_2, epochs = 100)
+net.save()
+TrainVideoJointParams(net, vids, inputs_2, epochs = 100)
 net.save()
 
 criterion = torch.nn.MSELoss(reduction='mean')

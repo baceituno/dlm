@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 print("loading training data...")
 # loads the training data
-data, vids, polygons = load_dataset(0,0) 
+data, vids, polygons = load_dataset(57,57) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, _ = parse_dataVids(data)

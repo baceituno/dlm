@@ -32,11 +32,11 @@ print(np.shape(data1))
 # define network
 print("Setting up network...")
 net = ContactNet(N_data)
-# net.load()
-# net.eval()
+net.load()
+net.eval()
 
-TrainShapeVAE(net, inputs_img, epochs = 100)
-TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 100)
+TrainShapeVAE(net, inputs_img, epochs = 25)
+TrainDecoders(net, inputs_1, inputs_2, inputs_img, inputs_sdf, epochs = 25)
     
 # training set
 print("training planner")
