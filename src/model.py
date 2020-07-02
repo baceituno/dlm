@@ -277,7 +277,7 @@ class ContactNet(torch.nn.Module):
 		self.vid_v_dec.add_module("vrelu_8", torch.nn.ReLU())
 		self.vid_v_dec.add_module("vpfc91", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.vid_v_dec.add_module("vprelu_91", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vpfc90c", torch.nn.Linear(200, 40))
+		self.vid_v_dec.add_module("vpfc90c", torch.nn.Linear(self.rnn_dim, 40))
 
 		# fc decoder
 		self.vid_fc_dec = torch.nn.Sequential()
