@@ -53,47 +53,47 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10):
 		losses_test.append(loss_t)
 		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
 
-	criterion = torch.nn.MSELoss(reduction='mean')
-	optimizer = optim.Adam(net.parameters(), lr=0.0001)
-	losses_test = []
-	for epoch in range(epochs):
-		loss_t = 0
-		optimizer.zero_grad()
-		output = net.forwardVideotoTraj(torch.tensor(vids).float())
-		loss = criterion(100*output, 100*xtraj.float())
-		loss_t = loss.item()
-		loss.backward()
-		optimizer.step()
-		losses_test.append(loss_t)
+	# criterion = torch.nn.MSELoss(reduction='mean')
+	# optimizer = optim.Adam(net.parameters(), lr=0.0001)
+	# losses_test = []
+	# for epoch in range(epochs):
+	# 	loss_t = 0
+	# 	optimizer.zero_grad()
+	# 	output = net.forwardVideotoTraj(torch.tensor(vids).float())
+	# 	loss = criterion(100*output, 100*xtraj.float())
+	# 	loss_t = loss.item()
+	# 	loss.backward()
+	# 	optimizer.step()
+	# 	losses_test.append(loss_t)
 
-		print("Traj.Reconstruction loss at epoch ",epoch," = ",loss_t)
+	# 	print("Traj.Reconstruction loss at epoch ",epoch," = ",loss_t)
 
-	criterion = torch.nn.MSELoss(reduction='mean')
-	optimizer = optim.Adam(net.parameters(), lr=0.001)
-	losses_test = []
-	for epoch in range(epochs):
-		loss_t = 0
-		optimizer.zero_grad()
-		output = net.forwardVideotoImage(torch.tensor(vids).float())
-		loss = criterion(10*output, 10*x_img.view(-1,1,50,50).float())
-		loss_t = loss.item()
-		losses_test.append(loss_t)
-		loss.backward()
-		optimizer.step()
+	# criterion = torch.nn.MSELoss(reduction='mean')
+	# optimizer = optim.Adam(net.parameters(), lr=0.001)
+	# losses_test = []
+	# for epoch in range(epochs):
+	# 	loss_t = 0
+	# 	optimizer.zero_grad()
+	# 	output = net.forwardVideotoImage(torch.tensor(vids).float())
+	# 	loss = criterion(10*output, 10*x_img.view(-1,1,50,50).float())
+	# 	loss_t = loss.item()
+	# 	losses_test.append(loss_t)
+	# 	loss.backward()
+	# 	optimizer.step()
 
-		print("Mask Reconstruction loss at epoch ",epoch," = ",loss_t)
+	# 	print("Mask Reconstruction loss at epoch ",epoch," = ",loss_t)
 
-	plt.figure(1)
-	plt.plot(losses_test,color="b")
-	# plt.show()
+	# plt.figure(1)
+	# plt.plot(losses_test,color="b")
+	# # plt.show()
 
-	plt.figure(2)
-	plt.plot(losses_test,color="b")
-	# plt.show()
+	# plt.figure(2)
+	# plt.plot(losses_test,color="b")
+	# # plt.show()
 
-	plt.figure(3)
-	plt.plot(losses_test,color="b")
-	# plt.show()
+	# plt.figure(3)
+	# plt.plot(losses_test,color="b")
+	# # plt.show()
 
 
 def TrainVideoJointParams(net, vids, x, epochs = 100):

@@ -24,16 +24,22 @@ print(np.shape(vids))
 
 # define network
 print("Setting up network...")
-net = ContactNet(N_data)
+use_cuda = torch.cuda.is_available()                   # check if GPU exists
+device = torch.device("cuda" if use_cuda else "cpu")   # use CPU or GPU
+net = ContactNet(N_data).to(device)
 net.addFrameVAELayers()
 net.addVideoLayers()
+
+if torch.cuda.device_count() > 1:
+    print("Using", torch.cuda.device_count(), "GPUs!")
+    net = torch.nn.DataParallel(net)
 # net.load()
 # net.eval()
 
 
 print("training video autoencoders")
-TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100)
-net.save()
+TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 50)
+# net.save()
 TrainVideoJointParams(net, vids, inputs_2, epochs = 100)
 net.save()
 
