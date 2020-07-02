@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, pols = load_dataset(1,1) 
+data, vids, pols = load_dataset(57,57) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
