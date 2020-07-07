@@ -33,15 +33,16 @@ net.addVideoLayers()
 if torch.cuda.device_count() > 1:
     print("Using", torch.cuda.device_count(), "GPUs!")
     net = torch.nn.DataParallel(net)
-# net.load()
-# net.eval()
+    pdb.set_trace()
+net.load()
+net.eval()
 
 
 print("training video autoencoders")
-TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 50)
-# net.save()
-TrainVideoJointParams(net, vids, inputs_2, epochs = 100)
+TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 1000)
 net.save()
+# TrainVideoParams(net, vids, inputs_2, epochs = 100)
+# net.save()
 
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=0.0001)
@@ -58,5 +59,5 @@ for epoch in range(100):  # loop over the dataset multiple times
 
     print("Train loss at epoch ",epoch," = ",loss_t)
 
-net.save()
-net.gen_resVid(vids,'trainVid')
+# net.save()
+net.gen_resVid(vids,'trainVid_57')

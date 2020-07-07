@@ -37,18 +37,34 @@ class ContactNet(torch.nn.Module):
 		self.addShapeVAELayers()
 		self.addDecoderLayers()
 
-		self.cto_su = torch.nn.Sequential()
-		self.cto_su.add_module("fcx10", torch.nn.Linear(190, 200))
-		self.cto_su.add_module("relux_11", torch.nn.ReLU())
-		self.cto_su.add_module("fcx12", torch.nn.Linear(200, 200))
-		self.cto_su.add_module("rexlu_12", torch.nn.ReLU())
-		self.cto_su.add_module("fcx120", torch.nn.Linear(200, 200))
-		self.cto_su.add_module("rexlu_120", torch.nn.ReLU())
-		self.cto_su.add_module("fcx1200", torch.nn.Linear(200, 200))
-		self.cto_su.add_module("relux_1200", torch.nn.ReLU())
-		self.cto_su.add_module("fcx12000", torch.nn.Linear(200, 200))
-		self.cto_su.add_module("relux_12000", torch.nn.ReLU())
-		self.cto_su.add_module("fcx12001", torch.nn.Linear(200, 40))
+		# self.cto_su1 = torch.nn.Sequential()
+		# self.cto_su1.add_module("fcx10", torch.nn.Linear(190, 200))
+		# self.cto_su1.add_module("relux_11", torch.nn.ReLU())
+		# self.cto_su1.add_module("fcx12", torch.nn.Linear(200, 200))
+		# self.cto_su1.add_module("rexlu_12", torch.nn.ReLU())
+		# self.cto_su1.add_module("fcx120", torch.nn.Linear(200, 200))
+		# self.cto_su1.add_module("rexlu_120", torch.nn.ReLU())
+		# self.cto_su1.add_module("fcx1200", torch.nn.Linear(200, 200))
+		# self.cto_su1.add_module("relux_1200", torch.nn.ReLU())
+		# self.cto_su1.add_module("fcx12000", torch.nn.Linear(200, 200))
+		# self.cto_su1.add_module("relux_12000", torch.nn.ReLU())
+		# self.cto_su1.add_module("fcx12001", torch.nn.Linear(200, 20))
+
+		# self.cto_su2 = torch.nn.Sequential()
+		# self.cto_su2.add_module("fcx10", torch.nn.Linear(190, 200))
+		# self.cto_su2.add_module("relux_11", torch.nn.ReLU())
+		# self.cto_su2.add_module("fcx12", torch.nn.Linear(200, 200))
+		# self.cto_su2.add_module("rexlu_12", torch.nn.ReLU())
+		# self.cto_su2.add_module("fcx120", torch.nn.Linear(200, 200))
+		# self.cto_su2.add_module("rexlu_120", torch.nn.ReLU())
+		# self.cto_su2.add_module("fcx1200", torch.nn.Linear(200, 200))
+		# self.cto_su2.add_module("relux_1200", torch.nn.ReLU())
+		# self.cto_su2.add_module("fcx12000", torch.nn.Linear(200, 200))
+		# self.cto_su2.add_module("relux_12000", torch.nn.ReLU())
+		# self.cto_su2.add_module("fcx12001", torch.nn.Linear(200, 20))
+
+		self.dp_fc = torch.nn.Linear(24, 24)
+		self.ddp_fc = torch.nn.Linear(24, 24)
 
 	#########################	
 	# Deep Learning Methods #
@@ -294,8 +310,6 @@ class ContactNet(torch.nn.Module):
 		self.vid_fc_dec.add_module("revlu_1201", torch.nn.ReLU())
 		self.vid_fc_dec.add_module("fcv1202", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.vid_fc_dec.add_module("revvlu_1202", torch.nn.ReLU())
-		self.vid_fc_dec.add_module("fcv1203", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_fc_dec.add_module("revvlu_1203", torch.nn.LeakyReLU(0.2))
 		self.vid_fc_dec.add_module("fc1v2001", torch.nn.Linear(self.rnn_dim, 40))
 
 		# p_e decoder
@@ -326,7 +340,7 @@ class ContactNet(torch.nn.Module):
 		self.vid_fce_dec.add_module("rvelu_1700", torch.nn.ReLU())
 		self.vid_fce_dec.add_module("vfc17001", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.vid_fce_dec.add_module("vrelu_17001", torch.nn.ReLU())
-		self.vid_fce_dec.add_module("vfc17x001", torch.nn.Linear(self.frame_dim, 40))
+		self.vid_fce_dec.add_module("vfc17x001", torch.nn.Linear(self.rnn_dim, 40))
 
 	#######################################	
 	# Differentiable Optimization Methods #
@@ -357,22 +371,16 @@ class ContactNet(torch.nn.Module):
 		# adds constraints
 		constraints = []
 		for t in range(self.T):
-			for c in range(self.N_c):
-				if t == 0:
-					constraints.append(ddp[c,t]*self.dt**2 == p[c,t] - 2*p[c,t] + p[c,t+1])
-					constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
-				elif t == self.T-1:
-					constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t])
-					constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t])
-				else:
-					constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t+1])
-					constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
-
-				# constraints.append(ddp[c,t] <= 50)
-				# constraints.append(ddp[c+self.N_c,t] <= 50)
-
-				# constraints.append(ddp[c,t] >= -50)
-				# constraints.append(ddp[c+self.N_c,t] >= -50)
+			# for c in range(self.N_c):
+			# 	# if t == 0:
+			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t] - 2*p[c,t] + p[c,t+1])
+			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
+			# 	# elif t == self.T-1:
+			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t])
+			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t])
+			# 	# else:
+			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t+1])
+			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
 
 			# linear quasi-dynamics
 			constraints.append(sum(f[:self.N_c,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t] + err[0,t])
@@ -395,7 +403,7 @@ class ContactNet(torch.nn.Module):
 
 			# constraints contacts to their respective facets
 			for c in range(self.N_c):
-				constraints.append(p[c,t]		  == alpha1[c,t]*v[c*4,t]	 + alpha2[c,t]*v[c*4 + 2,t])
+				constraints.append(p[c,t]		   == alpha1[c,t]*v[c*4,t]	 + alpha2[c,t]*v[c*4 + 2,t])
 				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*4 + 1,t] + alpha2[c,t]*v[c*4 + 3,t])
 				constraints.append(alpha1[c,t] + alpha2[c,t] == 1)
 				constraints.append(alpha1[c,t] >= 0)
@@ -422,10 +430,10 @@ class ContactNet(torch.nn.Module):
 			constraints.append(gamma_e[2,t] >= 0)
 			constraints.append(gamma_e[3,t] >= 0)
 
-		objective = cp.Minimize(cp.pnorm(err, p=2) + cp.pnorm(f, p=2))
+		objective = cp.Minimize(0.01*cp.pnorm(err, p=2) + cp.pnorm(f, p=2))
 		problem = cp.Problem(objective, constraints)
 		
-		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e, err, ddp])
+		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e, err])
 
 	def setupDiff(self, dims = 3, T = 5):
 		# decision variables
@@ -485,7 +493,7 @@ class ContactNet(torch.nn.Module):
 			verts = scale*np.array([x0, x1, x2])
 			p0 = np.array([xr + polygon[7+8*i], yr - polygon[8+8*i]])
 			r1 = Hull(p0, verts, restitution=restitution, mass = 0.1, fric_coeff=1, name="obj_"+str(i))
-			r1.add_force(MDP(g=100))
+			# r1.add_force(MDP(g=100))
 			bodies.append(r1)
 			joints += [FixedJoint(r1, bodies[0])]
 			for j in range(i):
@@ -495,23 +503,25 @@ class ContactNet(torch.nn.Module):
 		traj_f = []
 		for i in range(self.N_c):
 			pos0 = [500+scale*p[i,0],500-scale*p[i+self.N_c,0]]
-			c = Circle(pos0, 1.5, mass = 100, vel=(0, 0, 0), restitution=restitution, fric_coeff=100, name = "f"+str(i))
+			c = Circle(pos0, 1, mass = 1, vel=(0, 0, 0), restitution=restitution, fric_coeff=100, name = "f"+str(i))
 			bodies.append(c)
+			c.add_no_contact(bodies[0])
 			traj = torch.cat((scale*dp[i,:],-scale*dp[i+self.N_c,:]), axis=0).view(2,self.T+1)
 			traj_f.append(Trajectory(vel = traj, name = "f"+str(i)))
+		c.add_no_contact(bodies[-2])
 
-		world = World(bodies, joints, dt=self.dt/10, tol = 1e-6, eps=0.1, strict_no_penetration = False)
+		world = World(bodies, joints, dt=self.dt/5, tol = 1e-6, eps=float("inf"), post_stab = False, strict_no_penetration = True)
 		screen = None
 		pygame.init()
 		screen = pygame.display.set_mode((1000, 1000), pygame.DOUBLEBUF)
 		screen.set_alpha(None)
-		run_world_traj(world, run_time = 0.61, screen=screen, recorder=None, print_time=False, traj=traj_f)
+		run_world_traj(world, run_time = 0.7, screen=screen, recorder=None, print_time=False, traj=traj_f)
 		for t in range(self.T):
 			if t > 0:
-				y0 = torch.cat((world.states[t][1].view(1,1) - 500, 500 - world.states[t][2].view(1,1), scale*world.states[t][0].view(1,1)), axis = 0)/scale
+				y0 = torch.cat((world.states[t][1].view(1,1) - 500, 500 - world.states[t][2].view(1,1), scale*world.states[t][0].view(1,1)/100), axis = 0)/scale
 				y = torch.cat((y,y0), axis = 1)
 			else:
-				y = torch.cat((world.states[t][1].view(1,1) - 500, 500 - world.states[t][2].view(1,1), scale*world.states[t][0].view(1,1)), axis = 0)/scale
+				y = torch.cat((world.states[t][1].view(1,1) - 500, 500 - world.states[t][2].view(1,1), scale*world.states[t][0].view(1,1)/100), axis = 0)/scale
 		return y
 
 	def forwardSagittalDiffSim(self, p, dp, polygon, xtraj0, rad):
@@ -665,31 +675,32 @@ class ContactNet(torch.nn.Module):
 
 			# p_e = p_e0
 			# p_r = p_r0
-			v = v0
+			# v = v0
 			# fc = fc0
 			# fc_e = fc_e0
 
-			p, f, _, _, _, _, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+			p, f, _, _, _, _, _, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc.view(8,5), p_e.view(4,5), fc_e.view(8,5), v.view(8, 5), p_r.view(4, 5))
+			
+			# p = self.cto_su1(torch.cat((r.view(1,15), ddr.view(1,15), fc.view(1,40), p_e.view(1,20), fc_e.view(1,40), v.view(1,40), p_r.view(1,20)),axis=1)).view(-1,5)
+			# f = self.cto_su2(torch.cat((r.view(1,15), ddr.view(1,15), fc.view(1,40), p_e.view(1,20), fc_e.view(1,40), v.view(1,40), p_r.view(1,20)),axis=1)).view(-1,5)
+
 			# for t in range(5):
-			p0 = (p[:,0]-torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0))+torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0)
+			p0 = 10*(p[:,0]-torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0))+torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0)
 			p = torch.cat((p0.view(-1,1), p), axis = 1)
 
-			print(np.shape(p))
 
 			dp, ddp = self.Difflayer(p.view(4,6))
-			
-			# print(p)
-			# print(dp)
+			# dp = self.ddp_fc(p.view(1,-1)).view(4,6)
+			# ddp = self.ddp_fc(p.view(1,-1)).view(4,6)
 			# pdb.set_trace()
 			self.rad = 10
 			xtraj_new = self.forwardPlanarDiffSim(p, dp.double(), polygons[i,:], r.view(3,5)[:,0], self.rad)
 			print(xtraj_new)
 			print(r.view(3,5))
-			if first:				
-				y = torch.cat((xtraj_new.view(1,-1), .1*ddp.view(1,-1).double()), axis = 1)
-				first = False
+			if i == 0:				
+				y = torch.cat((xtraj_new.view(1,-1), 1e-6*ddp.view(1,-1).double()), axis = 1)
 			else:
-				y1 = torch.cat((xtraj_new.view(1,-1), .1*ddp.view(1,-1).double()), axis = 1)
+				y1 = torch.cat((xtraj_new.view(1,-1), 1e-6*ddp.view(1,-1).double()), axis = 1)
 				y = torch.cat((y, y1), axis = 0)
 		# self.rad = self.rad/1.1
 		# if self.rad < 1:
@@ -734,7 +745,7 @@ class ContactNet(torch.nn.Module):
 			# dr, ddr = self.Difflayer(r.view(3,5))
 
 			# solves for the contact trajectory
-			p, f, _, _, _, _, _, err, _ = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+			p, f, _, _, _, _, _, err = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
 
 			if first:				
 				y = torch.cat([p.view(1,-1), f.view(1,-1), 0*torch.max(err).view(1,-1)], axis = 1)
