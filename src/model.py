@@ -28,14 +28,12 @@ class ContactNet(torch.nn.Module):
 		self.tol = 1
 		self.rad = 10
 		self.shape_dim = 360
-		self.frame_dim = 2000
-		self.rnn_dim = 5000
+		self.frame_dim = 200
+		self.rnn_dim = 500
 
 		# CTO layers
 		self.CTOlayer = self.setupCTO()
 		self.Difflayer = self.setupDiff(dims=4, T = 6)
-		self.addShapeVAELayers()
-		self.addDecoderLayers()
 
 		# self.cto_su1 = torch.nn.Sequential()
 		# self.cto_su1.add_module("fcx10", torch.nn.Linear(190, 200))
@@ -63,8 +61,8 @@ class ContactNet(torch.nn.Module):
 		# self.cto_su2.add_module("relux_12000", torch.nn.ReLU())
 		# self.cto_su2.add_module("fcx12001", torch.nn.Linear(200, 20))
 
-		self.dp_fc = torch.nn.Linear(24, 24)
-		self.ddp_fc = torch.nn.Linear(24, 24)
+		# self.dp_fc = torch.nn.Linear(24, 24)
+		# self.ddp_fc = torch.nn.Linear(24, 24)
 
 	#########################	
 	# Deep Learning Methods #
@@ -120,18 +118,26 @@ class ContactNet(torch.nn.Module):
 		self.vid_enc.add_module("vid_bn_3", torch.nn.BatchNorm2d(24))
 		self.vid_enc.add_module("vid_relu_3", torch.nn.LeakyReLU(0.2))
 		self.vid_enc.add_module("vid_flatten", torch.nn.Flatten())
-		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(3456,3456))
+		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(3456,2*self.frame_dim))
 		self.vid_enc.add_module("vid_relu_4", torch.nn.LeakyReLU(0.2))
+		self.vid_enc.add_module("vid_fc_enc4", torch.nn.Linear(2*self.frame_dim,2*self.frame_dim))
+		self.vid_enc.add_module("vid_relu_5", torch.nn.LeakyReLU(0.2))
+		self.vid_enc.add_module("vid_fc_enc5", torch.nn.Linear(2*self.frame_dim,2*self.frame_dim))
+		self.vid_enc.add_module("vid_relu_6", torch.nn.LeakyReLU(0.2))
 
 		# layers for frame VAE
-		self.vid_fc1 = torch.nn.Linear(3456, self.frame_dim)
-		self.vid_fc2 = torch.nn.Linear(3456, self.frame_dim)
-		self.vid_fc3 = torch.nn.Linear(self.frame_dim, 3456)
+		self.vid_fc1 = torch.nn.Linear(2*self.frame_dim, self.frame_dim)
+		self.vid_fc2 = torch.nn.Linear(2*self.frame_dim, self.frame_dim)
+		self.vid_fc3 = torch.nn.Linear(self.frame_dim, 2*self.frame_dim)
 
 		self.vid_dec0 = torch.nn.Sequential()
-		self.vid_dec0.add_module("vid_relu_dec4", torch.nn.LeakyReLU(0.2))
-		self.vid_dec0.add_module("vid_fc_dec4", torch.nn.Linear(3456,3456))
+		self.vid_dec0.add_module("vid_relu_dec6", torch.nn.LeakyReLU(0.2))
+		self.vid_dec0.add_module("vid_fc_dec6", torch.nn.Linear(2*self.frame_dim,2*self.frame_dim))
 		self.vid_dec0.add_module("vid_relu_dec5", torch.nn.LeakyReLU(0.2))
+		self.vid_dec0.add_module("vid_fc_dec5", torch.nn.Linear(2*self.frame_dim,2*self.frame_dim))
+		self.vid_dec0.add_module("vid_relu_dec4", torch.nn.LeakyReLU(0.2))
+		self.vid_dec0.add_module("vid_fc_dec4", torch.nn.Linear(2*self.frame_dim,3456))
+		self.vid_dec0.add_module("vid_relu_dec3", torch.nn.LeakyReLU(0.2))
 
 		# frame decoders
 		self.vid_dec = torch.nn.Sequential()
@@ -430,7 +436,7 @@ class ContactNet(torch.nn.Module):
 			constraints.append(gamma_e[2,t] >= 0)
 			constraints.append(gamma_e[3,t] >= 0)
 
-		objective = cp.Minimize(0.01*cp.pnorm(err, p=2) + cp.pnorm(f, p=2))
+		objective = cp.Minimize(0.1*cp.pnorm(err, p=1) + cp.pnorm(f, p=2))
 		problem = cp.Problem(objective, constraints)
 		
 		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e, err])
@@ -685,7 +691,7 @@ class ContactNet(torch.nn.Module):
 			# f = self.cto_su2(torch.cat((r.view(1,15), ddr.view(1,15), fc.view(1,40), p_e.view(1,20), fc_e.view(1,40), v.view(1,40), p_r.view(1,20)),axis=1)).view(-1,5)
 
 			# for t in range(5):
-			p0 = 10*(p[:,0]-torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0))+torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0)
+			p0 = 1.2*(p[:,0]-torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0))+torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0)
 			p = torch.cat((p0.view(-1,1), p), axis = 1)
 
 
@@ -756,7 +762,6 @@ class ContactNet(torch.nn.Module):
 		# self.tol = self.tol/1.1
 		return y
 
-
 	def forwardEndToEnd(self, video):
 		# passes through the optimization problem
 		# video encoding
@@ -811,7 +816,6 @@ class ContactNet(torch.nn.Module):
 				y = torch.cat((y, y1), axis = 0)
 
 		return y
-
 
 	#####################	
 	# Parameter Methods #

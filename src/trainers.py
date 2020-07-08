@@ -95,6 +95,29 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10):
 	# plt.plot(losses_test,color="b")
 	# # plt.show()
 
+def VizVideoDecoders(net, vids, xtraj, x_img, epochs = 1):
+	dimVid = 3*100*100
+
+	import torchvision.models as models
+	import torchvision.transforms as transforms
+
+	pilTrans = transforms.ToTensor()
+
+	for epoch in range(epochs):
+		# trains for each times-step
+		for j in range(net.T):
+			loss_t = 0
+			frame = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
+			frame_rec, mu, logvar = net.forwardFrameVAE(frame.float())
+			# for i in range(120):
+			f1 = frame[0,:].view(3,100,100).detach().numpy()
+			f2 = frame_rec[0,:].view(3,100,100).detach().numpy()
+			
+			fig, ax = plt.subplots(nrows=2, sharex=True)
+			ax[0].imshow(np.transpose(f1, (1, 2, 0)))
+			ax[1].imshow(np.transpose(f2, (1, 2, 0)))
+			plt.show()
+
 
 def TrainVideoJointParams(net, vids, x, epochs = 100):
 	N_data = np.shape(vids)[0]

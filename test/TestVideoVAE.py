@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, pols = load_dataset(57,57) 
+data, vids, pols = load_dataset(1,1) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -36,12 +36,21 @@ if torch.cuda.device_count() > 1:
     pdb.set_trace()
 net.load()
 net.eval()
+<<<<<<< HEAD
+
+print("training video autoencoders")
+TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 1000)
+# VizVideoDecoders(net, vids, inputs_1, inputs_img)
+net.save()
+# TrainVideoParams(net, vids, inputs_2, epochs = 500)
+=======
 
 
 print("training video autoencoders")
 TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 1000)
 net.save()
 # TrainVideoParams(net, vids, inputs_2, epochs = 100)
+>>>>>>> 8d5354f7f8a2f06d7f368a181ff69af60ba58af5
 # net.save()
 
 criterion = torch.nn.MSELoss(reduction='mean')
