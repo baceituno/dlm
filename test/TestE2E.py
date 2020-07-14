@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, pols = load_dataset(0,0) 
+data, vids, polygons = load_dataset(57,57)
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -33,27 +33,29 @@ net.addVideoLayers()
 net.load()
 net.eval()
 
-print("training video autoencoders")
-TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100)
-VizVideoDecoders(net, vids, inputs_1, inputs_img)
-# net.save()
-# TrainVideoParams(net, vids, inputs_2, epochs = 500)
-# net.save()
 
+losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=0.0001)
-for epoch in range(200):  # loop over the dataset multiple times
+optimizer = optim.Adam(net.parameters(), lr=1e-6)
+for epoch in range(100):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
 
-    outputs = net.forwardVideo(torch.tensor(vids).float())
-    loss = criterion(10*outputs, 10*labels.float())
+    outputs = net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float())
+    loss = criterion(10*outputs.float(), 10*torch.cat((inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,30))).float()), axis=1))
     
     loss_t = loss.item()
     loss.backward()
     optimizer.step()
 
+    losses_test.append(loss_t)
     print("Train loss at epoch ",epoch," = ",loss_t)
 
-net.save()
-net.gen_resVid(vids,'trainVid_57')
+plt.figure(1)
+plt.plot(losses_test,color="b")
+plt.show()
+
+net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float())
+
+# net.save()
+# net.gen_resVid(vids,'trainVid_57')

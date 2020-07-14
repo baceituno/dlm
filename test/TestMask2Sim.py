@@ -43,7 +43,7 @@ for epoch in range(20):
 	start = time.time()
 	
 	outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float())
-	loss = criterion(100*outputs.float(), 100*torch.cat((inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
+	loss = criterion(10*outputs.float(), 10*torch.cat((inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
 	loss_t = loss.item()
 	end = time.time()
     

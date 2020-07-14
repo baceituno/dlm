@@ -17,6 +17,12 @@ def LossFrameVAE(recon_x, x, mu, logvar):
 	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 	return 100*BCE + KLD
 
+def LossFrameCVAE(recon_x, x, mu, logvar):
+	x = np.reshape(x,(-1,3,100,100))
+	BCE1 = F.mse_loss(recon_x, x, size_average=True)
+	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+	return 100*BCE1 + KLD
+
 def TrainVideoVAE(net, vids, epochs = 10):
 	optimizer = optim.Adam(net.parameters(), lr=0.0001)
 	dimVid = 3*100*100
@@ -33,6 +39,29 @@ def TrainVideoVAE(net, vids, epochs = 10):
 			
 		loss_t = loss.item()
 		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
+
+def TrainVideoCVAE(net, vids, epochs = 10):
+	optimizer = optim.Adam(net.parameters(), lr=0.00001)
+	losses_test = []
+	dimVid = 3*100*100
+	for epoch in range(epochs):
+		# trains for each times-step
+		for j in range(net.T):
+			loss_t = 0
+			optimizer.zero_grad()
+			# frame_0 = torch.tensor(vids[:,0:dimVid])
+			frame_0 = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
+			frame = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
+
+			frame_rec, mu, logvar = net.forwardFrameCVAE(frame.float(),frame_0.float())
+			loss = LossFrameCVAE(frame_rec, frame.float(), mu, logvar)
+			loss.backward()
+			optimizer.step()
+			
+		loss_t = loss.item()
+		losses_test.append(loss_t)
+		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
+
 
 def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10):
 	optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -109,6 +138,29 @@ def VizVideoDecoders(net, vids, xtraj, x_img, epochs = 1):
 			loss_t = 0
 			frame = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
 			frame_rec, mu, logvar = net.forwardFrameVAE(frame.float())
+			# for i in range(120):
+			f1 = frame[0,:].view(3,100,100).detach().numpy()
+			f2 = frame_rec[0,:].view(3,100,100).detach().numpy()
+			
+			fig, ax = plt.subplots(nrows=2, sharex=True)
+			ax[0].imshow(np.transpose(f1, (1, 2, 0)))
+			ax[1].imshow(np.transpose(f2, (1, 2, 0)))
+			plt.show()
+
+def VizVideoCondDecoders(net, vids, xtraj, x_img, epochs = 1):
+	dimVid = 3*100*100
+
+	import torchvision.models as models
+	import torchvision.transforms as transforms
+
+	pilTrans = transforms.ToTensor()
+
+	for epoch in range(epochs):
+		# trains for each times-step
+		for j in range(net.T):
+			frame = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
+			frame_0 = torch.tensor(vids[:,0:dimVid])
+			frame_rec, mu, logvar = net.forwardFrameCVAE(frame.float(),frame_0.float())
 			# for i in range(120):
 			f1 = frame[0,:].view(3,100,100).detach().numpy()
 			f2 = frame_rec[0,:].view(3,100,100).detach().numpy()
