@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, pols = load_dataset(1,1) 
+data, vids, pols = load_dataset(0,0) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -29,21 +29,24 @@ net = ContactNet(N_data).to(device)
 net.addFrameCVAELayers()
 net.addVideoLayers()
 
-net.load()
+net.load(name = "cnn_1_model.pt")
 net.eval()
 
-print("training video cod. autoencoders")
+# print("training video cod. autoencoders")
 # TrainVideoCVAE(net, vids, epochs = 100)
-# VizVideoCondDecoders(net, vids, inputs_1, inputs_img)
+# TrainVideoJointParams(net, vids, inputs_2, epochs = 5000)
+# TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 5000)
+# net.save(name = "cnn_1_model.pt")
+# TrainVideoParams(net, vids, inputs_2, epochs = 500)
+# TrainVideo2V(net, vids, inputs_2, epochs = 1000)
 # net.save()
-TrainVideoParams(net, vids, inputs_2, epochs = 200)
-net.save()
+
 
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=0.0001)
+optimizer = optim.Adam(net.parameters(), lr=1e-5)
 
 try:
-	for epoch in range(500):  # loop over the dataset multiple times
+	for epoch in range(3):  # loop over the dataset multiple times
 	    loss_t = 0
 	    optimizer.zero_grad()
 
@@ -58,5 +61,5 @@ try:
 except:
 	pass
 
-net.save()
+# net.save(name = "cnn_1_model.pt")
 net.gen_resVid(vids,'trainVid_57')

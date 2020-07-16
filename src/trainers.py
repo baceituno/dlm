@@ -67,35 +67,21 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10):
 	optimizer = optim.Adam(net.parameters(), lr=0.001)
 	losses_test = []
 	dimVid = 3*100*100
+
+	criterion = torch.nn.MSELoss(reduction='mean')
+	optimizer = optim.Adam(net.parameters(), lr=0.0001)
+	losses_test = []
 	for epoch in range(epochs):
-		# trains for each times-step
-		for j in range(net.T):
-			loss_t = 0
-			optimizer.zero_grad()
-			frame = torch.tensor(vids[:,j*dimVid:(j+1)*dimVid])
-			frame_rec, mu, logvar = net.forwardFrameVAE(frame.float())
-			loss = LossFrameVAE(frame_rec, frame.float(), mu, logvar)
-			loss.backward()
-			optimizer.step()
-			
+		loss_t = 0
+		optimizer.zero_grad()
+		output = net.forwardVideotoTraj(torch.tensor(vids).float())
+		loss = criterion(100*output, 100*xtraj.float())
 		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
 		losses_test.append(loss_t)
-		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
 
-	# criterion = torch.nn.MSELoss(reduction='mean')
-	# optimizer = optim.Adam(net.parameters(), lr=0.0001)
-	# losses_test = []
-	# for epoch in range(epochs):
-	# 	loss_t = 0
-	# 	optimizer.zero_grad()
-	# 	output = net.forwardVideotoTraj(torch.tensor(vids).float())
-	# 	loss = criterion(100*output, 100*xtraj.float())
-	# 	loss_t = loss.item()
-	# 	loss.backward()
-	# 	optimizer.step()
-	# 	losses_test.append(loss_t)
-
-	# 	print("Traj.Reconstruction loss at epoch ",epoch," = ",loss_t)
+		print("Traj.Reconstruction loss at epoch ",epoch," = ",loss_t)
 
 	# criterion = torch.nn.MSELoss(reduction='mean')
 	# optimizer = optim.Adam(net.parameters(), lr=0.001)
@@ -273,22 +259,22 @@ def TrainVideoParams(net, vids, x, epochs = 100):
 
 		print("fc_e Reconstruction loss at epoch ",epoch," = ",loss_t)
 
-	plt.subplot(3, 2, 1)
-	plt.plot(losses_test1)
+	# plt.subplot(3, 2, 1)
+	# plt.plot(losses_test1)
 
-	plt.subplot(3, 2, 2)
-	plt.plot(losses_test2)
+	# plt.subplot(3, 2, 2)
+	# plt.plot(losses_test2)
 
-	plt.subplot(3, 2, 3)
-	plt.plot(losses_test3)
+	# plt.subplot(3, 2, 3)
+	# plt.plot(losses_test3)
 
-	plt.subplot(3, 2, 4)
-	plt.plot(losses_test4)
+	# plt.subplot(3, 2, 4)
+	# plt.plot(losses_test4)
 
-	plt.subplot(3, 2, 5)
-	plt.plot(losses_test5)
+	# plt.subplot(3, 2, 5)
+	# plt.plot(losses_test5)
 
-	plt.show()
+	# plt.show()
 
 
 def TrainShapeVAE(net, inputs_img, epochs = 10):

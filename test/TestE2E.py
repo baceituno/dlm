@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, polygons = load_dataset(57,57)
+data, vids, polygons = load_dataset(0,0)
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -30,14 +30,14 @@ net = ContactNet(N_data).to(device)
 net.addFrameVAELayers()
 net.addVideoLayers()
 
-net.load()
+net.load(name = "cnn_1_model.pt")
 net.eval()
 
 
 losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=1e-6)
-for epoch in range(100):  # loop over the dataset multiple times
+for epoch in range(50):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
 
@@ -55,7 +55,7 @@ plt.figure(1)
 plt.plot(losses_test,color="b")
 plt.show()
 
-net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float())
+net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float(), render = True)
 
 # net.save()
 # net.gen_resVid(vids,'trainVid_57')

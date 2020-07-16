@@ -31,9 +31,12 @@ class ContactNet(torch.nn.Module):
 		self.frame_dim = 450
 		self.rnn_dim = 750
 
+		self.w = 0.01
+
 		# CTO layers
-		self.CTOlayer = self.setupCTO()
+		self.CTOlayer = self.setupCTO(w_err = self.w)
 		self.Difflayer = self.setupDiff(dims=4, T = 6)
+		self.Difflayer3 = self.setupDiff(dims=3, T = 5)
 
 	#########################	
 	# Deep Learning Methods #
@@ -275,6 +278,10 @@ class ContactNet(torch.nn.Module):
 		self.traj_dec.add_module("vprvelu_dc_3", torch.nn.ReLU())
 		self.traj_dec.add_module("vfc_vdc4", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.traj_dec.add_module("vprelvu_dc_4", torch.nn.ReLU())
+		self.traj_dec.add_module("vfc_vdc5", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.traj_dec.add_module("vprelvu_dc_5", torch.nn.ReLU())
+		self.traj_dec.add_module("vfc_vdc6", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.traj_dec.add_module("vprelvu_dc_6", torch.nn.ReLU())
 		self.traj_dec.add_module("vfc_dvc8", torch.nn.Linear(self.rnn_dim, 9*self.T))
 		self.traj_dec.add_module("vfc_dvc89", torch.nn.Linear(9*self.T, 9*self.T))
 
@@ -377,7 +384,7 @@ class ContactNet(torch.nn.Module):
 	# Differentiable Optimization Methods #
 	#######################################
 
-	def setupCTO(self):
+	def setupCTO(self, w_err = 0.01, w_f = 1):
 		# decision variables
 		p = cp.Variable((2*self.N_c, self.T)) # contact location
 		ddp = cp.Variable((2*self.N_c, self.T)) # contact location
@@ -402,17 +409,6 @@ class ContactNet(torch.nn.Module):
 		# adds constraints
 		constraints = []
 		for t in range(self.T):
-			# for c in range(self.N_c):
-			# 	# if t == 0:
-			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t] - 2*p[c,t] + p[c,t+1])
-			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
-			# 	# elif t == self.T-1:
-			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t])
-			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t])
-			# 	# else:
-			# 	# 	constraints.append(ddp[c,t]*self.dt**2 == p[c,t-1] - 2*p[c,t] + p[c,t+1])
-			# 	# 	constraints.append(ddp[c+self.N_c,t]*self.dt**2 == p[c+self.N_c,t-1] - 2*p[c+self.N_c,t] + p[c+self.N_c,t+1])
-
 			# linear quasi-dynamics
 			constraints.append(sum(f[:self.N_c,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t] + err[0,t])
 			constraints.append(sum(f[self.N_c:,t]) + f_e[2,t] + f_e[3,t] == ddr[1,t] + err[1,t])
@@ -430,7 +426,7 @@ class ContactNet(torch.nn.Module):
 
 			tau += (p_e[0,t]-r[0,t])*f_e[2,t] - (p_e[2,t]-r[1,t])*f_e[0,t]
 			tau += (p_e[1,t]-r[0,t])*f_e[3,t] - (p_e[3,t]-r[1,t])*f_e[1,t]
-			constraints.append(tau == ddr[2,t] + err[2,t])
+			constraints.append(tau == ddr[2,t]*0.01 + err[2,t])
 
 			# constraints contacts to their respective facets
 			for c in range(self.N_c):
@@ -461,7 +457,7 @@ class ContactNet(torch.nn.Module):
 			constraints.append(gamma_e[2,t] >= 0)
 			constraints.append(gamma_e[3,t] >= 0)
 
-		objective = cp.Minimize(cp.pnorm(err, p=2) + cp.pnorm(f, p=2))
+		objective = cp.Minimize(w_err*cp.pnorm(err, p=2) + w_f*cp.pnorm(f, p=2))
 		problem = cp.Problem(objective, constraints)
 		
 		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e, err])
@@ -534,7 +530,7 @@ class ContactNet(torch.nn.Module):
 		traj_f = []
 		for i in range(self.N_c):
 			pos0 = [500+scale*p[i,0],500-scale*p[i+self.N_c,0]]
-			c = Circle(pos0, 10, mass = 1, vel=(0, 0, 0), restitution=restitution, fric_coeff=0.01, name = "f"+str(i))
+			c = Circle(pos0, 10, mass = 10, vel=(0, 0, 0), restitution=restitution, fric_coeff=0.01, name = "f"+str(i))
 			bodies.append(c)
 			c.add_no_contact(bodies[0])
 			traj = torch.cat((scale*dp[i,:],-scale*dp[i+self.N_c,:]), axis=0).view(2,self.T+1)
@@ -743,7 +739,7 @@ class ContactNet(torch.nn.Module):
 		# video encoding
 		for t in range(self.T):
 			frame = video[:,t*3*100*100:(t+1)*3*100*100]
-			e_frame = self.forwardFrameEncoder(frame).detach().view(-1,1,self.frame_dim)
+			e_frame = self.forwardFrameEncoder(frame).view(-1,1,self.frame_dim)
 			if t == 0:
 				e_vid = e_frame
 			else:
@@ -756,34 +752,39 @@ class ContactNet(torch.nn.Module):
 		print('decoding')
 		# extracts image encoding and object trajectory
 		# e_img = self.shap_dec(e_vid)
-		xtraj = self.traj_dec(e_vid).detach()
+		xtraj = self.traj_dec(e_vid)
 		p_r = self.vid_p_dec.forward(e_vid)
 		v = self.vid_v_dec.forward(e_vid)
 		p_e = self.vid_pe_dec.forward(e_vid)
 		fc = self.vid_fc_dec.forward(e_vid)
 		fc_e = self.vid_fce_dec.forward(e_vid)
-		print('going through cvx')
+
 		# decodes each trajectory
-		first = True
+		print('going through cvx')
 		for i in range(np.shape(e_frame)[0]):
 			# params that should be obtained from video
 			r = xtraj[i,:15]
 			# params that can be computed explicity
-			dr = xtraj[i,15:30]
-			ddr = xtraj[i,30:]
+			# dr = xtraj[i,15:30]
+			# ddr = xtraj[i,30:]
 
 			# learnes the parameters
-			# dr, ddr = self.Difflayer(r.view(3,5))
+			dr, ddr = self.Difflayer3(r.view(3,5))
 
 			# solves for the contact trajectory
-			p, f, _, _, _, _, _, err = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+			while True:
+				try: 
+					p, f, _, _, _, _, _, err = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+					break
+				except:
+					p, f, _, _, _, _, _, err = self.CTOlayer_surr(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+					print('infeasible')
+					pass
 
-			if first:				
-				y = torch.cat([p.view(1,-1), f.view(1,-1), 1e-6*torch.max(err).view(1,-1)], axis = 1)
-				first = False
+			if i == 0:				
+				y = torch.cat([p.view(1,-1), f.view(1,-1), 1e-3*torch.max(err).view(1,-1)], axis = 1)
 			else:
-				y_1 = torch.cat([p.view(1,-1), f.view(1,-1), 1e-6*torch.max(err).view(1,-1)], axis = 1)
-				y = torch.cat((y, y_1), axis = 0)
+				y = torch.cat((y, torch.cat([p.view(1,-1), f.view(1,-1), 1e-3*torch.max(err).view(1,-1)], axis = 1)), axis = 0)
 		# self.tol = self.tol/1.1
 		return y
 
@@ -817,14 +818,24 @@ class ContactNet(torch.nn.Module):
 			# params that should be obtained from video
 			r = xtraj[i,:15]
 			# params that can be computed explicity
-			dr = xtraj[i,15:30]
-			ddr = xtraj[i,30:]
+			# dr = xtraj[i,15:30]
+			# ddr = xtraj[i,30:]
 
 			# learnes the parameters
-			# dr, ddr = self.Difflayer(r.view(3,5))
-
+			dr, ddr = self.Difflayer3(r.view(3,5))
+			# print(ddr)
+			# print(v)
 			# solves for the contact trajectory
-			p, f, _, _, _, _, _, err = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+			
+			while True:
+				try: 
+					p, f, _, _, _, _, _, err = self.CTOlayer(r.view(3,5), ddr.view(3,5), fc[i,:].view(8,5), p_e[i,:].view(4,5), fc_e[i,:].view(8,5), v[i,:].view(8, 5), p_r[i,:].view(4, 5))
+					break
+				except:
+					self.w = self.w/10
+					self.CTOlayer = self.setupCTO(w_err = self.w)
+					print('infeasible')
+					pass
 			
 			# normalizes to avoid penetrration
 			d1 = (p[0:2,0]-r.view(3,5)[0:2,0])
@@ -834,9 +845,9 @@ class ContactNet(torch.nn.Module):
 			p2 = d2/(torch.norm(d2) + 1e-3)
 
 
-			p0 = 0.2*torch.cat((p1,p2), axis = 0) + torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]), axis = 0)
+			# p0 = 0.2*torch.cat((p1,p2), axis = 0) + torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]), axis = 0)
 
-			# p0 = torch.cat((d1,d2), axis = 0) + torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]), axis = 0)
+			p0 = p[0:4,0]
 			
 			p = torch.cat((p0.view(-1,1), p), axis = 1)
 
@@ -858,7 +869,7 @@ class ContactNet(torch.nn.Module):
 	def forwardVideotoImage(self,video):
 		for t in range(self.T):
 			frame = video[:,t*3*100*100:(t+1)*3*100*100]
-			e_frame = self.forwardFrameEncoder(frame).detach().view(-1,1,self.frame_dim)
+			e_frame = self.forwardFrameCNN(frame).detach().view(-1,1,self.frame_dim)
 			if t == 0:
 				e_vid = e_frame
 			else:
@@ -878,7 +889,7 @@ class ContactNet(torch.nn.Module):
 		# passes through all frames
 		for t in range(self.T):
 			frame = video[:,t*3*100*100:(t+1)*3*100*100]
-			e_frame = self.forwardFrameEncoder(frame).detach().view(-1,1,self.frame_dim)
+			e_frame = self.forwardFrameCNN(frame).detach().view(-1,1,self.frame_dim)
 			if t == 0:
 				e_vid = e_frame
 			else:
@@ -886,8 +897,8 @@ class ContactNet(torch.nn.Module):
 		
 		# passes frames through RNN
 		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
-		e_vid = self.fcRNN(rnn_out[:, -1, :])
-		
+		e_vid = self.fcRNN(rnn_out[:, -1, :]).detach()
+
 		# extracts object trajecotry
 		return self.traj_dec(e_vid)
 
