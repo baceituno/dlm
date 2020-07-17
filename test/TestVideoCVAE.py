@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, pols = load_dataset(0,0) 
+data, vids, pols = load_dataset(1,1) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -45,21 +45,18 @@ net.eval()
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=1e-5)
 
-try:
-	for epoch in range(3):  # loop over the dataset multiple times
-	    loss_t = 0
-	    optimizer.zero_grad()
+for epoch in range(200):  # loop over the dataset multiple times
+    loss_t = 0
+    optimizer.zero_grad()
 
-	    outputs = net.forwardVideo(torch.tensor(vids).float())
-	    loss = criterion(10*outputs, 10*labels.float())
-	    
-	    loss_t = loss.item()
-	    loss.backward()
-	    optimizer.step()
+    outputs = net.forwardVideo(torch.tensor(vids).float())
+    loss = criterion(10*outputs, 10*labels.float())
+    
+    loss_t = loss.item()
+    loss.backward()
+    optimizer.step()
 
-	    print("Train loss at epoch ",epoch," = ",loss_t)
-except:
-	pass
+    print("Train loss at epoch ",epoch," = ",loss_t)
 
-# net.save(name = "cnn_1_model.pt")
+net.save(name = "cnn_1_model.pt")
 net.gen_resVid(vids,'trainVid_57')

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 print("loading training data...")
 # loads the training data
-data, vids, polygons = load_dataset(57,57) 
+data, vids, polygons = load_dataset(0,0) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, _ = parse_dataVids(data)
@@ -25,11 +25,16 @@ print(np.shape(vids))
 # define network
 print("Setting up network...")
 net = ContactNet(N_data)
-# net.addFrameVAELayers()
-# net.addVideoLayers()
-# net.load()
-# net.eval()
+net.addFrameVAELayers()
+net.addVideoLayers()
+net.addShapeVAELayers()
+net.addDecoderLayers()
+net.load(name = "cnn_1_model.pt")
+net.eval()
 
+corr_inputs_1 = inputs_1[:,:15].float().view(-1,3,5)
+corr_inputs_1[:,2,:] = corr_inputs_1[:,2,:]*0.03
+corr_inputs_1 = corr_inputs_1.float().view(-1,15)
 
 # print("training video autoencoders")
 # TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 10)
@@ -43,15 +48,15 @@ for epoch in range(20):
 	start = time.time()
 	
 	outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float())
-	loss = criterion(10*outputs.float(), 10*torch.cat((inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
+	loss = criterion(10*outputs.float(), 10*torch.cat((corr_inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
 	loss_t = loss.item()
 	end = time.time()
     
 	print(end - start)
 	start = time.time()
 
-	loss.backward()
-	optimizer.step()
+	# loss.backward()
+	# optimizer.step()
 	end = time.time()
 	print(end - start)
 

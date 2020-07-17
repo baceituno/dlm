@@ -34,15 +34,19 @@ net.load(name = "cnn_1_model.pt")
 net.eval()
 
 
+corr_inputs_1 = inputs_1[:,:15].float().view(-1,3,5)
+corr_inputs_1[:,2,:] = corr_inputs_1[:,2,:]*0.03
+corr_inputs_1 = corr_inputs_1.float().view(-1,15)
+
 losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
 optimizer = optim.Adam(net.parameters(), lr=1e-6)
-for epoch in range(50):  # loop over the dataset multiple times
+for epoch in range(100):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
 
-    outputs = net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float())
-    loss = criterion(10*outputs.float(), 10*torch.cat((inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,30))).float()), axis=1))
+    outputs = net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float(), False)
+    loss = criterion(100*outputs.float(), 100*corr_inputs_1[:,:15].float())
     
     loss_t = loss.item()
     loss.backward()
