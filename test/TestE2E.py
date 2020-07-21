@@ -16,7 +16,7 @@ import time
 
 print("loading training data...")
 # loads the training data
-data, vids, polygons = load_dataset(0,0)
+data, vids, polygons = load_dataset(2,2)
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
@@ -30,7 +30,7 @@ net = ContactNet(N_data).to(device)
 net.addFrameVAELayers()
 net.addVideoLayers()
 
-net.load(name = "cnn_1_model.pt")
+net.load(name = "cnn_2_model.pt")
 net.eval()
 
 
@@ -40,17 +40,18 @@ corr_inputs_1 = corr_inputs_1.float().view(-1,15)
 
 losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=1e-6)
-for epoch in range(100):  # loop over the dataset multiple times
+optimizer = optim.Adam(net.parameters(), lr=1e-5)
+for epoch in range(20):  # loop over the dataset multiple times
     loss_t = 0
     optimizer.zero_grad()
 
-    outputs = net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float(), False)
-    loss = criterion(100*outputs.float(), 100*corr_inputs_1[:,:15].float())
+    outputs = net.forwardEndToEnd(torch.tensor(vids).float(), torch.tensor(polygons).float(),inputs_1.float(), True)
+    loss = criterion(10*outputs.float(), 10*corr_inputs_1[:,:15].float())
     
     loss_t = loss.item()
-    loss.backward()
-    optimizer.step()
+    with torch.autograd.detect_anomaly():
+    	loss.backward()
+    	optimizer.step()
 
     losses_test.append(loss_t)
     print("Train loss at epoch ",epoch," = ",loss_t)

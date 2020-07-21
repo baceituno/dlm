@@ -29,7 +29,7 @@ net.addFrameVAELayers()
 net.addVideoLayers()
 net.addShapeVAELayers()
 net.addDecoderLayers()
-net.load(name = "cnn_1_model.pt")
+net.load(name = "cnn_0_model.pt")
 net.eval()
 
 corr_inputs_1 = inputs_1[:,:15].float().view(-1,3,5)
@@ -40,23 +40,22 @@ corr_inputs_1 = corr_inputs_1.float().view(-1,15)
 # TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 10)
 losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=1e-3)
-for epoch in range(20):
+optimizer = optim.Adam(net.parameters(), lr=1e-5)
+for epoch in range(100):
 	loss_t = 0
 	optimizer.zero_grad()
 	print('\n\n\n\n')
 	start = time.time()
-	
-	outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float())
+	with torch.autograd.detect_anomaly():
+		outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float())
 	loss = criterion(10*outputs.float(), 10*torch.cat((corr_inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
 	loss_t = loss.item()
 	end = time.time()
     
 	print(end - start)
 	start = time.time()
-
-	# loss.backward()
-	# optimizer.step()
+	loss.backward()
+	optimizer.step()
 	end = time.time()
 	print(end - start)
 
@@ -68,5 +67,8 @@ for epoch in range(20):
 plt.figure(1)
 plt.plot(losses_test,color="b")
 plt.show()
+
+outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float(), True)
+
 
 # pdb.set_trace()
