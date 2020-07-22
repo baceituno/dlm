@@ -290,7 +290,7 @@ class ContactNet(torch.nn.Module):
 
 	def addVideoLayers(self):
 		# lstm layers
-		self.videoRNN = torch.nn.LSTM(input_size=self.frame_dim, hidden_size=self.rnn_dim//2, num_layers=3, bidirectional = True, batch_first=True)
+		self.videoRNN = torch.nn.LSTM(input_size=self.frame_dim, hidden_size=self.rnn_dim//2, num_layers=5, bidirectional = True, batch_first=True)
 		
 		# rnn fully connected layers
 		self.fcRNN = torch.nn.Sequential()
@@ -300,32 +300,30 @@ class ContactNet(torch.nn.Module):
 
 		# decodes the pose of the object
 		self.traj_dec = torch.nn.Sequential()
-		self.traj_dec.add_module("traj_fc_dc1", torch.nn.Linear(self.rnn_dim, 5*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_dc1", torch.nn.Linear(self.rnn_dim*self.T, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_1", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_dc2", torch.nn.Linear(5*self.rnn_dim, 5*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_dc2", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_2", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_dc3", torch.nn.Linear(5*self.rnn_dim, 5*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_dc3", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_3", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_vdc4", torch.nn.Linear(5*self.rnn_dim, 5*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_vdc4", torch.nn.Linear(self.T*self.rnn_dim, 5*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_4", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_vdc5", torch.nn.Linear(5*self.rnn_dim, 5*self.rnn_dim))
-		self.traj_dec.add_module("traj_relvu_dc_5", torch.nn.ReLU())
 		self.traj_dec.add_module("traj_fc_vdc6", torch.nn.Linear(5*self.rnn_dim, self.rnn_dim))
 		self.traj_dec.add_module("traj_relvu_dc_6", torch.nn.ReLU())
 		self.traj_dec.add_module("traj_fc_dvc8", torch.nn.Linear(self.rnn_dim, 9*self.T))
-		self.traj_dec.add_module("traj_fc_dvc89", torch.nn.Linear(9*self.T, 9*self.T))
+		self.traj_dec.add_module("traj_fc_dvc9", torch.nn.Linear(9*self.T, 9*self.T))
 
 		# decodes the shape of the object
 		self.shap_dec = torch.nn.Sequential()
-		self.shap_dec.add_module("fcv_sc1", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.shap_dec.add_module("fcv_sc1", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.shap_dec.add_module("revlu_sc_1", torch.nn.LeakyReLU(0.2))
-		self.shap_dec.add_module("fcv_sc2", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.shap_dec.add_module("fcv_sc2", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.shap_dec.add_module("revlu_sc_2", torch.nn.ReLU())
-		self.shap_dec.add_module("fc_vsc5", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.shap_dec.add_module("fc_vsc5", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.shap_dec.add_module("relvu_sc_5", torch.nn.ReLU())
-		self.shap_dec.add_module("fcvv_sc6", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.shap_dec.add_module("fcvv_sc6", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.shap_dec.add_module("revlu_sc_6", torch.nn.ReLU())
-		self.shap_dec.add_module("fcv_sc8", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.shap_dec.add_module("fcv_sc8", torch.nn.Linear(self.T*self.rnn_dim, self.rnn_dim))
 		self.shap_dec.add_module("revlu_sc_8", torch.nn.LeakyReLU(0.2))
 		self.shap_dec.add_module("fcv_sc9x", torch.nn.Linear(self.rnn_dim,self.shape_dim))
 
@@ -766,13 +764,13 @@ class ContactNet(torch.nn.Module):
 		
 		# passes frames through RNN
 		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
-		e_vid = self.fcRNN(rnn_out[:, -1, :]).detach()
+		e_vid = self.fcRNN(rnn_out[:, -1, :])
+		# pdb.set_trace()
 		# e_vid = self.lstm_su(e_vid.view(-1,self.T*self.frame_dim))
-		print('decoding')
 		# extracts image encoding and object trajectory
 		
-		e_img = self.shap_dec(e_vid)
-		xtraj = self.traj_dec(e_vid)
+		e_img = self.shap_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+		xtraj = self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
 
 		embedding = torch.cat((e_vid, e_img, xtraj), axis = 1)
 
@@ -788,11 +786,11 @@ class ContactNet(torch.nn.Module):
 		fc0 = x[:,20:60]
 		fc_e0 = x[:,80:120]
 
-		self.w = 0.01
-		self.CTOlayer = self.setupCTO(w_err = self.w)
+		# self.w = 0.01
+		# self.CTOlayer = self.setupCTO(w_err = self.w)
 
 		# decodes each trajectory
-		print('going through cvx')
+		# print('going through cvx')
 		for i in range(np.shape(e_frame)[0]):
 			# params that should be obtained from video
 			r = xtraj[i,:15]
@@ -824,7 +822,7 @@ class ContactNet(torch.nn.Module):
 				if failed:
 					print('recovered from error')
 
-			self.w = 0.01
+			# self.w = 0.01
 
 			if i == 0:				
 				y = torch.cat([p.view(1,-1), 1e-6*torch.max(err).view(1,-1)], axis = 1)
@@ -943,7 +941,7 @@ class ContactNet(torch.nn.Module):
 		e_vid = self.fcRNN(rnn_out[:, -1, :])
 		
 		# extracts image encoding
-		e_img = self.shap_dec(e_vid)
+		e_img = self.shap_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
 
 		# decodes image
 		return self.decoder(self.fc3(e_img).view(-1,20,6,6))
@@ -960,10 +958,9 @@ class ContactNet(torch.nn.Module):
 		
 		# passes frames through RNN
 		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
-		e_vid = self.fcRNN(rnn_out[:, -1, :]).detach()
-
+		
 		# extracts object trajecotry
-		return self.traj_dec(e_vid)
+		return self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
 
 	#####################
 	# Assesment methods #
@@ -983,18 +980,18 @@ class ContactNet(torch.nn.Module):
 		# passes frames through RNN
 		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
 		e_vid = self.fcRNN(rnn_out[:, -1, :])
+	
+		e_img = self.shap_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+		xtraj = self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
 
-		e_img = self.shap_dec(e_vid)
-		xtraj = self.traj_dec(e_vid)
-
-		e_vid = torch.cat((e_vid, e_img, xtraj), axis = 1)
+		embedding = torch.cat((e_vid, e_img, xtraj), axis = 1)
 
 		# extracts the parameters
-		p_r = self.vid_p_dec.forward(e_vid)
-		v = self.vid_v_dec.forward(e_vid)
-		p_e = self.vid_pe_dec.forward(e_vid)
-		fc = self.vid_fc_dec.forward(e_vid)
-		fc_e = self.vid_fce_dec.forward(e_vid)
+		p_r = self.vid_p_dec.forward(embedding)
+		v = self.vid_v_dec.forward(embedding)
+		p_e = self.vid_pe_dec.forward(embedding)
+		fc = self.vid_fc_dec.forward(embedding)
+		fc_e = self.vid_fce_dec.forward(embedding)
 
 		# params that can be learned from above
 		p_r0 = x[:,0:20]

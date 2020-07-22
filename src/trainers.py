@@ -40,7 +40,7 @@ def TrainVideoCVAE(net, vids, epochs = 10):
 		print("Frame Autoencoder loss at epoch ",epoch," = ",loss_t)
 
 
-def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10, n_batches = 20):
+def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10, n_batches = 20, optimizer = None):
 	criterion = torch.nn.MSELoss(reduction='mean')
 	optimizer = optim.Adam(net.parameters(), lr=0.0001)
 	n_data = np.shape(vids)[0]
@@ -59,8 +59,6 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, epochs = 10, n_batches = 20):
 			losses_test.append(loss_t)
 
 		print("Traj.Reconstruction loss at epoch ",epoch," = ",loss_t)
-
-	net.addShapeVAELayers()
 
 	criterion = torch.nn.MSELoss(reduction='mean')
 	optimizer = optim.Adam(net.parameters(), lr=0.0001)
@@ -104,9 +102,8 @@ def VizVideoCondDecoders(net, vids, xtraj, x_img, epochs = 1, n_batches = 20):
 			ax[1].imshow(np.transpose(f2, (1, 2, 0)))
 			plt.show()
 
-def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20):
+def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20, optimizer = None):
 	N_data = np.shape(vids)[0]
-	optimizer = optim.Adam(net.parameters(), lr=1e-5)
 	criterion = torch.nn.MSELoss(reduction='mean')
 	losses_test1 = []
 	n_data = np.shape(vids)[0]
@@ -144,9 +141,8 @@ def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20):
 	# plt.plot(losses_test1)
 	# plt.show()
 
-def TrainVideo2V(net, vids, x, epochs = 100):
+def TrainVideo2V(net, vids, x, epochs = 100, optimizer = None):
 	N_data = np.shape(vids)[0]
-	optimizer = optim.Adam(net.parameters(), lr=0.0001)
 	criterion = torch.nn.MSELoss(reduction='mean')
 
 	for epoch in range(epochs):
