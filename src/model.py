@@ -19,7 +19,7 @@ from lcp_physics.physics.world import World, run_world_traj, Trajectory
 
 
 class ContactNet(torch.nn.Module):
-	def __init__(self, N_data):
+	def __init__(self, N_data = 0, sagittal = False):
 		super(ContactNet, self).__init__()
 		# contact-trajectory parameters 
 		self.N_c = 2
@@ -28,41 +28,30 @@ class ContactNet(torch.nn.Module):
 		self.tol = 1
 		self.rad = 10
 		self.shape_dim = 150
-		self.frame_dim = 300
-		self.rnn_dim = 400
+		self.frame_dim = 250
+		self.rnn_dim = 1000
+		self.sagittal = sagittal
 
 		self.w = 0.01
 
 		# CTO layers
-		self.CTOlayer = self.setupCTO(w_err = self.w)
+		if sagittal:
+			self.CTOlayer = self.setupCTOSag(w_err = self.w)
+		else:
+			self.CTOlayer = self.setupCTO(w_err = self.w)
+
 		self.Difflayer = self.setupDiff(dims=4, T = 6)
 		self.Difflayer3 = self.setupDiff(dims=3, T = 5)
 
 		self.cto_su1 = torch.nn.Sequential()
 		self.cto_su1.add_module("fcx10", torch.nn.Linear(190, 200))
 		self.cto_su1.add_module("relux_11", torch.nn.ReLU())
-		self.cto_su1.add_module("fcx12", torch.nn.Linear(200, 200))
-		self.cto_su1.add_module("rexlu_12", torch.nn.ReLU())
-		self.cto_su1.add_module("fcx120", torch.nn.Linear(200, 200))
-		self.cto_su1.add_module("rexlu_120", torch.nn.ReLU())
-		self.cto_su1.add_module("fcx1200", torch.nn.Linear(200, 200))
-		self.cto_su1.add_module("relux_1200", torch.nn.ReLU())
-		self.cto_su1.add_module("fcx12000", torch.nn.Linear(200, 200))
-		self.cto_su1.add_module("relux_12000", torch.nn.ReLU())
 		self.cto_su1.add_module("fcx12001", torch.nn.Linear(200, 20))
 
 
 		self.cto_su2 = torch.nn.Sequential()
 		self.cto_su2.add_module("fcx20", torch.nn.Linear(190, 200))
 		self.cto_su2.add_module("relux_21", torch.nn.ReLU())
-		self.cto_su2.add_module("fcx22", torch.nn.Linear(200, 200))
-		self.cto_su2.add_module("rexlu_22", torch.nn.ReLU())
-		self.cto_su2.add_module("fcx220", torch.nn.Linear(200, 200))
-		self.cto_su2.add_module("rexlu_220", torch.nn.ReLU())
-		self.cto_su2.add_module("fcx2200", torch.nn.Linear(200, 200))
-		self.cto_su2.add_module("rexlu_2200", torch.nn.ReLU())
-		self.cto_su2.add_module("fcx22000", torch.nn.Linear(200, 200))
-		self.cto_su2.add_module("rexlu_22000", torch.nn.ReLU())
 		self.cto_su2.add_module("fcx22001", torch.nn.Linear(200, 20))
 
 		self.lstm_su = torch.nn.Sequential()
@@ -111,49 +100,6 @@ class ContactNet(torch.nn.Module):
 		self.decoder.add_module("deconv_1", torch.nn.Conv2d(5, 1, 5, 1))
 		self.decoder.add_module("derelu_1", torch.nn.Sigmoid())
 
-	def addFrameVAELayers(self):
-		# frame encoder
-		self.vid_enc = torch.nn.Sequential()
-		self.vid_enc.add_module("vid_conv_1", torch.nn.Conv2d(3, 6, 4, 2, 1))
-		self.vid_enc.add_module("vid_bn_1", torch.nn.BatchNorm2d(6))
-		self.vid_enc.add_module("vid_relu_1", torch.nn.LeakyReLU(0.2))
-		self.vid_enc.add_module("vid_conv_2", torch.nn.Conv2d(6, 12, 4, 2, 1))
-		self.vid_enc.add_module("vid_bn_2", torch.nn.BatchNorm2d(12))
-		self.vid_enc.add_module("vid_relu_2", torch.nn.LeakyReLU(0.2))
-		self.vid_enc.add_module("vid_conv_3", torch.nn.Conv2d(12, 24, 4, 2, 1))
-		self.vid_enc.add_module("vid_bn_3", torch.nn.BatchNorm2d(24))
-		self.vid_enc.add_module("vid_relu_3", torch.nn.LeakyReLU(0.2))
-		self.vid_enc.add_module("vid_flatten", torch.nn.Flatten())
-		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(3456,2*self.frame_dim))
-		self.vid_enc.add_module("vid_relu_6", torch.nn.LeakyReLU(0.2))
-
-		# layers for frame VAE
-		self.vid_fc1 = torch.nn.Linear(2*self.frame_dim, self.frame_dim)
-		self.vid_fc2 = torch.nn.Linear(2*self.frame_dim, self.frame_dim)
-		self.vid_fc3 = torch.nn.Linear(self.frame_dim, 2*self.frame_dim)
-
-		self.vid_dec0 = torch.nn.Sequential()
-		self.vid_dec0.add_module("vid_relu_dec6", torch.nn.LeakyReLU(0.2))
-		self.vid_dec0.add_module("vid_fc_dec4", torch.nn.Linear(2*self.frame_dim,3456))
-		self.vid_dec0.add_module("vid_relu_dec3", torch.nn.LeakyReLU(0.2))
-
-		# frame decoders
-		self.vid_dec = torch.nn.Sequential()
-		self.vid_dec.add_module("vdeconvups_3", torch.nn.UpsamplingNearest2d(scale_factor=2))
-		self.vid_dec.add_module("vderepups_3", torch.nn.ReplicationPad2d(1))
-		self.vid_dec.add_module("vdeconv_3", torch.nn.Conv2d(24, 12, 2, 1))
-		self.vid_dec.add_module("vdebn_3", torch.nn.BatchNorm2d(12, 1.e-3))
-		self.vid_dec.add_module("vderelu_3", torch.nn.LeakyReLU(0.2))
-		self.vid_dec.add_module("vdeconvups_2", torch.nn.UpsamplingNearest2d(scale_factor=2))
-		self.vid_dec.add_module("vderepups_2", torch.nn.ReplicationPad2d(1))
-		self.vid_dec.add_module("vdeconv_2", torch.nn.Conv2d(12, 6, 2, 1))	
-		self.vid_dec.add_module("vdebn_2", torch.nn.BatchNorm2d(6, 1.e-3))
-		self.vid_dec.add_module("vderelu_2", torch.nn.LeakyReLU(0.2))
-		self.vid_dec.add_module("vdeconvups_1", torch.nn.UpsamplingNearest2d(scale_factor=2))
-		self.vid_dec.add_module("vderepups_1", torch.nn.ReplicationPad2d(1))
-		self.vid_dec.add_module("vdeconv_1", torch.nn.Conv2d(6, 3, 5, 1))
-		self.vid_dec.add_module("vderelu_1", torch.nn.Sigmoid())
-
 	def addFrameCVAELayers(self):
 		# frame encoder
 		self.vid_enc = torch.nn.Sequential()
@@ -166,8 +112,11 @@ class ContactNet(torch.nn.Module):
 		self.vid_enc.add_module("vid_conv_3", torch.nn.Conv2d(12, 24, 4, 2, 1))
 		self.vid_enc.add_module("vid_bn_3", torch.nn.BatchNorm2d(24))
 		self.vid_enc.add_module("vid_relu_3", torch.nn.LeakyReLU(0.2))
+		self.vid_enc.add_module("vid_conv_4", torch.nn.Conv2d(24, 48, 4, 2, 1))
+		self.vid_enc.add_module("vid_bn_4", torch.nn.BatchNorm2d(48))
+		self.vid_enc.add_module("vid_relu_4", torch.nn.LeakyReLU(0.2))
 		self.vid_enc.add_module("vid_flatten", torch.nn.Flatten())
-		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(3456,2*self.frame_dim))
+		self.vid_enc.add_module("vid_fc_enc", torch.nn.Linear(1728,2*self.frame_dim))
 		self.vid_enc.add_module("vid_relu_6", torch.nn.LeakyReLU(0.2))
 
 
@@ -209,7 +158,6 @@ class ContactNet(torch.nn.Module):
 		self.vid_dec.add_module("vderelu_1", torch.nn.Sigmoid())
 
 	def addDecoderLayers(self):
-
 		# p_r decoder
 		self.p_dec = torch.nn.Sequential()
 		self.p_dec.add_module("fc5", torch.nn.Linear(self.shape_dim+45, 200))
@@ -219,10 +167,6 @@ class ContactNet(torch.nn.Module):
 		self.p_dec.add_module("relu_6", torch.nn.ReLU())
 		self.p_dec.add_module("fc61", torch.nn.Linear(200, 200))
 		self.p_dec.add_module("relu_61", torch.nn.ReLU())
-		self.p_dec.add_module("fc62", torch.nn.Linear(200, 200))
-		self.p_dec.add_module("relu_62", torch.nn.ReLU())
-		self.p_dec.add_module("fc63", torch.nn.Linear(200, 200))
-		self.p_dec.add_module("relu_63", torch.nn.ReLU())
 		self.p_dec.add_module("fc60", torch.nn.Linear(200, 20))
 
 		# v decoder
@@ -230,17 +174,12 @@ class ContactNet(torch.nn.Module):
 		self.v_dec.add_module("fc7", torch.nn.Linear(self.shape_dim+45, 200))
 		# self.v_dec.add_module("dropout_7", torch.nn.Dropout(0.2))
 		self.v_dec.add_module("relu_7", torch.nn.ReLU())
-		self.v_dec.add_module("fc8", torch.nn.Linear(200, 1000))
+		self.v_dec.add_module("fc8", torch.nn.Linear(200, 200))
 		self.v_dec.add_module("relu_70", torch.nn.ReLU())
-		self.v_dec.add_module("fc80", torch.nn.Linear(1000, 1000))
-		self.v_dec.add_module("relu_700", torch.nn.ReLU())
-		self.v_dec.add_module("fc800", torch.nn.Linear(1000, 200))
-		# self.v_dec.add_module("bn8", torch.nn.BatchNorm1d(1000))
-		self.v_dec.add_module("relu_8", torch.nn.ReLU())
-		self.v_dec.add_module("fc9", torch.nn.Linear(200, 200))
-		self.v_dec.add_module("relu_9", torch.nn.ReLU())
-		self.v_dec.add_module("fc91", torch.nn.Linear(200, 200))
+		self.v_dec.add_module("fc800", torch.nn.Linear(200, 200))
 		self.v_dec.add_module("relu_91", torch.nn.ReLU())
+		self.v_dec.add_module("fc801", torch.nn.Linear(200, 200))
+		self.v_dec.add_module("relu_911", torch.nn.ReLU())
 		self.v_dec.add_module("fc90", torch.nn.Linear(200, 40))
 
 		# fc decoder
@@ -253,10 +192,6 @@ class ContactNet(torch.nn.Module):
 		self.fc_dec.add_module("relu_12", torch.nn.ReLU())
 		self.fc_dec.add_module("fc120", torch.nn.Linear(200, 200))
 		self.fc_dec.add_module("relu_120", torch.nn.ReLU())
-		self.fc_dec.add_module("fc1200", torch.nn.Linear(200, 200))
-		self.fc_dec.add_module("relu_1200", torch.nn.ReLU())
-		self.fc_dec.add_module("fc12000", torch.nn.Linear(200, 200))
-		self.fc_dec.add_module("relu_12000", torch.nn.ReLU())
 		self.fc_dec.add_module("fc12001", torch.nn.Linear(200, 40))
 
 		# p_e decoder
@@ -282,15 +217,13 @@ class ContactNet(torch.nn.Module):
 		self.fce_dec.add_module("relu_17", torch.nn.ReLU())
 		self.fce_dec.add_module("fc170", torch.nn.Linear(200, 200))
 		self.fce_dec.add_module("relu_170", torch.nn.ReLU())
-		self.fce_dec.add_module("fc1700", torch.nn.Linear(200, 200))
-		self.fce_dec.add_module("relu_1700", torch.nn.ReLU())
 		self.fce_dec.add_module("fc17000", torch.nn.Linear(200, 100))
 		self.fce_dec.add_module("relu_17000", torch.nn.ReLU())
 		self.fce_dec.add_module("fc17001", torch.nn.Linear(100, 40))
 
 	def addVideoLayers(self):
 		# lstm layers
-		self.videoRNN = torch.nn.LSTM(input_size=self.frame_dim, hidden_size=self.rnn_dim//2, num_layers=5, bidirectional = True, batch_first=True)
+		self.videoRNN = torch.nn.LSTM(input_size=self.frame_dim, hidden_size=self.rnn_dim//2, num_layers=7, bidirectional = True, batch_first=True)
 		
 		# rnn fully connected layers
 		self.fcRNN = torch.nn.Sequential()
@@ -298,72 +231,122 @@ class ContactNet(torch.nn.Module):
 		self.fcRNN.add_module("rnn_relu", torch.nn.ReLU())
 		self.fcRNN.add_module("rnn_fc2", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 
+		self.re_embed = torch.nn.Sequential()
+		self.re_embed.add_module("re_vfcvp5", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim + 1, self.rnn_dim + 9*self.T + self.shape_dim + 1))
+		self.re_embed.add_module("re_relu_vp5", torch.nn.ReLU())
+		self.re_embed.add_module("re_fcvp6", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim + 1, self.rnn_dim + 9*self.T + self.shape_dim + 1))
+		self.re_embed.add_module("re_relu_v6", torch.nn.ReLU())
+		self.re_embed.add_module("re_fcvp61", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim + 1, self.rnn_dim + 9*self.T + self.shape_dim + 1))
+		self.re_embed.add_module("re_relu_vp61", torch.nn.ReLU())
+		self.re_embed.add_module("re_vpfc60", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim + 1, self.rnn_dim + 9*self.T + self.shape_dim))
+
 		# decodes the pose of the object
 		self.traj_dec = torch.nn.Sequential()
-		self.traj_dec.add_module("traj_fc_dc1", torch.nn.Linear(self.rnn_dim*self.T, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_dc1", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_1", torch.nn.ReLU())
 		self.traj_dec.add_module("traj_fc_dc2", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_2", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_dc3", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_vdc3", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_3", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_vdc4", torch.nn.Linear(self.T*self.rnn_dim, 5*self.rnn_dim))
+		self.traj_dec.add_module("traj_fc_vdc4", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
 		self.traj_dec.add_module("traj_relu_dc_4", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_vdc6", torch.nn.Linear(5*self.rnn_dim, self.rnn_dim))
-		self.traj_dec.add_module("traj_relvu_dc_6", torch.nn.ReLU())
-		self.traj_dec.add_module("traj_fc_dvc8", torch.nn.Linear(self.rnn_dim, 9*self.T))
-		self.traj_dec.add_module("traj_fc_dvc9", torch.nn.Linear(9*self.T, 9*self.T))
+		self.traj_dec.add_module("traj_fc_vdc5", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_relu_dc_5", torch.nn.ReLU())
+		self.traj_dec.add_module("traj_fc_vdc6", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_relu_dc_6", torch.nn.ReLU())
+		self.traj_dec.add_module("traj_fc_vdc7", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_relu_dc_7", torch.nn.ReLU())
+		self.traj_dec.add_module("traj_fc_vdc8", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.traj_dec.add_module("traj_relu_dc_8", torch.nn.ReLU())
+		self.traj_dec.add_module("traj_fc_dcout", torch.nn.Linear(self.T*self.rnn_dim, 9*self.T))
 
 		# decodes the shape of the object
 		self.shap_dec = torch.nn.Sequential()
-		self.shap_dec.add_module("fcv_sc1", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
-		self.shap_dec.add_module("revlu_sc_1", torch.nn.LeakyReLU(0.2))
-		self.shap_dec.add_module("fcv_sc2", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
-		self.shap_dec.add_module("revlu_sc_2", torch.nn.ReLU())
-		self.shap_dec.add_module("fc_vsc5", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
-		self.shap_dec.add_module("relvu_sc_5", torch.nn.ReLU())
-		self.shap_dec.add_module("fcvv_sc6", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
-		self.shap_dec.add_module("revlu_sc_6", torch.nn.ReLU())
-		self.shap_dec.add_module("fcv_sc8", torch.nn.Linear(self.T*self.rnn_dim, self.rnn_dim))
-		self.shap_dec.add_module("revlu_sc_8", torch.nn.LeakyReLU(0.2))
-		self.shap_dec.add_module("fcv_sc9x", torch.nn.Linear(self.rnn_dim,self.shape_dim))
+		self.shap_dec.add_module("shap_fcv_sc1", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_1", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc2", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_2", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc3", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_3", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc4", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_4", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc5", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_5", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc6", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_6", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc7", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_7", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_sc8", torch.nn.Linear(self.T*self.rnn_dim, self.T*self.rnn_dim))
+		self.shap_dec.add_module("shap_revlu_sc_8", torch.nn.ReLU())
+		self.shap_dec.add_module("shap_fcv_out", torch.nn.Linear(self.T*self.rnn_dim,self.shape_dim))
 
 		# p_r decoder
 		self.vid_p_dec = torch.nn.Sequential()
-		self.vid_p_dec.add_module("vfcvp5", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
-		self.vid_p_dec.add_module("relu_vp5", torch.nn.ReLU())
-		self.vid_p_dec.add_module("fcvp6", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_p_dec.add_module("relu_v6", torch.nn.ReLU())
-		self.vid_p_dec.add_module("fcvp61", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_p_dec.add_module("relu_vp61", torch.nn.ReLU())
-		self.vid_p_dec.add_module("vpfc62", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_p_dec.add_module("vprelu_62", torch.nn.ReLU())
-		self.vid_p_dec.add_module("vpfc63", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_p_dec.add_module("vprelu_63", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc1", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_p_dec.add_module("p_relu1", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc2", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_p_dec.add_module("p_relu2", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc3", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_p_dec.add_module("p_relu3", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc4", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_p_dec.add_module("p_relu4", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc5", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim*2))
+		self.vid_p_dec.add_module("p_relu5", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc6", torch.nn.Linear(self.rnn_dim*2, 2*self.rnn_dim))
+		self.vid_p_dec.add_module("p_relu6", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc7", torch.nn.Linear(self.rnn_dim*2, 2*self.rnn_dim))
+		self.vid_p_dec.add_module("p_relu7", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc8", torch.nn.Linear(self.rnn_dim*2, 2*self.rnn_dim))
+		self.vid_p_dec.add_module("p_relu8", torch.nn.ReLU())
+		self.vid_p_dec.add_module("p_fc9", torch.nn.Linear(self.rnn_dim*2, self.rnn_dim))
+		self.vid_p_dec.add_module("p_relu9", torch.nn.ReLU())
 		self.vid_p_dec.add_module("vpfc60", torch.nn.Linear(self.rnn_dim, 20))
 
 		# v decoder
 		self.vid_v_dec = torch.nn.Sequential()
-		self.vid_v_dec.add_module("vpfc7", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
-		self.vid_v_dec.add_module("rvpelu_7", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vpfc8", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_v_dec.add_module("vprelu_70", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vpfc80", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_v_dec.add_module("vprelu_700", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vfc800", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_v_dec.add_module("vrelu_8", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vpfc91", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_v_dec.add_module("vprelu_91", torch.nn.ReLU())
-		self.vid_v_dec.add_module("vpfc90c", torch.nn.Linear(self.rnn_dim, 40))
+		self.vid_v_dec.add_module("v_recfc1", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu1", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc2", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu2", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc3", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu3", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc4", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu4", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc5", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu5", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc6", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu6", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc7", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu7", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc8", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu8", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfc9", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelu9", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfcx", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_v_dec.add_module("v_recrelux", torch.nn.ReLU())
+		self.vid_v_dec.add_module("v_recfcout", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, 40))
 
 		# fc decoder
 		self.vid_fc_dec = torch.nn.Sequential()
-		self.vid_fc_dec.add_module("vfc10", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
-		self.vid_fc_dec.add_module("rvelu_11", torch.nn.ReLU())
-		self.vid_fc_dec.add_module("fvc12", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_fc_dec.add_module("revlu_12", torch.nn.ReLU())
-		self.vid_fc_dec.add_module("fc1v20", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
-		self.vid_fc_dec.add_module("revluv_120", torch.nn.ReLU())
-		self.vid_fc_dec.add_module("fc1v2001", torch.nn.Linear(self.rnn_dim, 40))
+		self.vid_fc_dec.add_module("fc_fc1", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_fc_dec.add_module("fc_relu_1", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc2", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_fc_dec.add_module("fc_relu_2", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc3", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim + 9*self.T + self.shape_dim))
+		self.vid_fc_dec.add_module("fc_relu_3", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc4", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_4", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc5", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_5", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc6", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_6", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc7", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_7", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc8", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_8", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc9", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fc_dec.add_module("fc_relu_9", torch.nn.ReLU())
+		self.vid_fc_dec.add_module("fc_fc_out", torch.nn.Linear(self.rnn_dim, 40))
 
 		# p_e decoder
 		self.vid_pe_dec = torch.nn.Sequential()
@@ -373,7 +356,20 @@ class ContactNet(torch.nn.Module):
 		self.vid_pe_dec.add_module("reclu_14", torch.nn.ReLU())
 		self.vid_pe_dec.add_module("fcc140", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.vid_pe_dec.add_module("reclu_140", torch.nn.ReLU())
+		self.vid_pe_dec.add_module("fcc1400", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_pe_dec.add_module("reclu_1400", torch.nn.ReLU())
+		self.vid_pe_dec.add_module("fcc14000", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_pe_dec.add_module("reclu_14000", torch.nn.ReLU())
 		self.vid_pe_dec.add_module("fcv14000x", torch.nn.Linear(self.rnn_dim, 20))
+
+		self.vid_sag_pe_dec = torch.nn.Sequential()
+		self.vid_sag_pe_dec.add_module("sag_fcc13", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
+		self.vid_sag_pe_dec.add_module("sag_rcelu_14", torch.nn.ReLU())
+		self.vid_sag_pe_dec.add_module("sag_fcc14", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_pe_dec.add_module("sag_reclu_14", torch.nn.ReLU())
+		self.vid_sag_pe_dec.add_module("sag_fcc140", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_pe_dec.add_module("sag_reclu_140", torch.nn.ReLU())
+		self.vid_sag_pe_dec.add_module("sag_fcv14000x", torch.nn.Linear(self.rnn_dim, 20))
 
 		# fc_e decoder
 		self.vid_fce_dec = torch.nn.Sequential()
@@ -383,7 +379,28 @@ class ContactNet(torch.nn.Module):
 		self.vid_fce_dec.add_module("vrelu_17", torch.nn.ReLU())
 		self.vid_fce_dec.add_module("vfc170", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
 		self.vid_fce_dec.add_module("vrelu_170", torch.nn.ReLU())
+		self.vid_fce_dec.add_module("vfc1701", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fce_dec.add_module("vrelu_1701", torch.nn.ReLU())
+		self.vid_fce_dec.add_module("vfc1702", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fce_dec.add_module("vrelu_1702", torch.nn.ReLU())
+		self.vid_fce_dec.add_module("vfc1703", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_fce_dec.add_module("vrelu_1703", torch.nn.ReLU())
 		self.vid_fce_dec.add_module("vfc17x001", torch.nn.Linear(self.rnn_dim, 40))
+
+		self.vid_sag_fce_dec = torch.nn.Sequential()
+		self.vid_sag_fce_dec.add_module("sag_vfc16", torch.nn.Linear(self.rnn_dim + 9*self.T + self.shape_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_16", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc17", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_17", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc170", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_170", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc1701", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_1701", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc1702", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_1702", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc1703", torch.nn.Linear(self.rnn_dim, self.rnn_dim))
+		self.vid_sag_fce_dec.add_module("sag_vrelu_1703", torch.nn.ReLU())
+		self.vid_sag_fce_dec.add_module("sag_vfc17x001", torch.nn.Linear(self.rnn_dim, 40))
 
 	#######################################	
 	# Differentiable Optimization Methods #
@@ -417,6 +434,84 @@ class ContactNet(torch.nn.Module):
 			# linear quasi-dynamics
 			constraints.append(sum(f[:self.N_c,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t] + err[0,t])
 			constraints.append(sum(f[self.N_c:,t]) + f_e[2,t] + f_e[3,t] == ddr[1,t] + err[1,t])
+
+			# angular dynamics with McCormick Envelopes
+			tau = 0
+			for c in range(self.N_c):
+				u1 = (p_r[c,t]-r[0,t])
+				v1 = f[self.N_c + c,t]
+
+				u2 = (p_r[self.N_c + c,t]-r[1,t])
+				v2 = f[c,t]
+
+				tau += u1*v1 - u2*v2
+
+			tau += (p_e[0,t]-r[0,t])*f_e[2,t] - (p_e[2,t]-r[1,t])*f_e[0,t]
+			tau += (p_e[1,t]-r[0,t])*f_e[3,t] - (p_e[3,t]-r[1,t])*f_e[1,t]
+			constraints.append(tau == ddr[2,t] + err[2,t])
+
+			# constraints contacts to their respective facets
+			for c in range(self.N_c):
+				constraints.append(p[c,t]		   == alpha1[c,t]*v[c*4,t]	 + alpha2[c,t]*v[c*4 + 2,t])
+				constraints.append(p[c+self.N_c,t] == alpha1[c,t]*v[c*4 + 1,t] + alpha2[c,t]*v[c*4 + 3,t])
+				constraints.append(alpha1[c,t] + alpha2[c,t] == 1)
+				constraints.append(alpha1[c,t] >= 0)
+				constraints.append(alpha2[c,t] >= 0)
+				# if t < 4:
+					# constraints.append(p[c,t] == p_r[c,t])
+					# constraints.append(p[c+self.N_c,t] == p_r[c+self.N_c,t])
+
+			# friction cone constraints
+			for c in range(self.N_c):
+				constraints.append(gamma[c,t]*fc[c*4,t]	 + gamma[c + self.N_c,t]*fc[c*4 + 2,t] == f[c,t])
+				constraints.append(gamma[c,t]*fc[c*4 + 1,t] + gamma[c + self.N_c,t]*fc[c*4 + 3,t] == f[self.N_c + c,t])
+				constraints.append(gamma[c,t] >= 0)
+				constraints.append(gamma[self.N_c + c,t] >= 0)
+			
+			# external friction cone constratins
+			constraints.append(gamma_e[0,t]*fc_e[0,t] + gamma_e[1,t]*fc_e[2,t] == f_e[0,t])
+			constraints.append(gamma_e[0,t]*fc_e[1,t] + gamma_e[1,t]*fc_e[3,t] == f_e[2,t])
+			constraints.append(gamma_e[0,t] >= 0)
+			constraints.append(gamma_e[1,t] >= 0)
+
+			constraints.append(gamma_e[2,t]*fc_e[4,t] + gamma_e[3,t]*fc_e[6,t] == f_e[1,t])
+			constraints.append(gamma_e[2,t]*fc_e[5,t] + gamma_e[3,t]*fc_e[7,t] == f_e[3,t])
+			constraints.append(gamma_e[2,t] >= 0)
+			constraints.append(gamma_e[3,t] >= 0)
+
+		objective = cp.Minimize(w_err*cp.pnorm(err, p=2) + w_f*cp.pnorm(f, p=2))
+		problem = cp.Problem(objective, constraints)
+		
+		return CvxpyLayer(problem, parameters=[r, ddr, fc, p_e, fc_e, v, p_r], variables=[p, f, f_e, alpha1, alpha2, gamma, gamma_e, err])
+
+	def setupCTOSag(self, w_err = 0.01, w_f = 1):
+		# decision variables
+		p = cp.Variable((2*self.N_c, self.T)) # contact location
+		ddp = cp.Variable((2*self.N_c, self.T)) # contact location
+		f = cp.Variable((2*self.N_c,self.T)) # forces
+		gamma = cp.Variable((2*self.N_c,self.T)) # cone weights
+		alpha1 = cp.Variable((self.N_c,self.T)) # vertex weights
+		alpha2 = cp.Variable((self.N_c,self.T)) # vertex weights
+		f_e = cp.Variable((4,self.T)) # external force
+		gamma_e = cp.Variable((4,self.T)) # cone weights
+		err = cp.Variable((3,self.T)) # errors
+		
+		# input parameters
+		r = cp.Parameter((3, self.T)) # trajectory
+		ddr = cp.Parameter((3, self.T)) # trajectory
+		p_r = cp.Parameter((2*self.N_c, self.T)) # reference contact location
+		fc = cp.Parameter((4*self.N_c, self.T)) # friction cone
+		p_e = cp.Parameter((4, self.T)) # external contact location
+		fc_e = cp.Parameter((8, self.T)) # external friction cone
+		v = cp.Parameter((4*self.N_c, self.T)) # facets for each contacts
+		# tol = cp.Parameter((1, 1)) # error tolerance
+
+		# adds constraints
+		constraints = []
+		for t in range(self.T):
+			# linear quasi-dynamics
+			constraints.append(sum(f[:self.N_c,t]) + f_e[0,t] + f_e[1,t] == ddr[0,t] + err[0,t])
+			constraints.append(sum(f[self.N_c:,t]) + f_e[2,t] + f_e[3,t] - 9.8 == ddr[1,t] + err[1,t])
 
 			# angular dynamics with McCormick Envelopes
 			tau = 0
@@ -506,8 +601,6 @@ class ContactNet(torch.nn.Module):
 		n_pol = int(polygon[0])
 		scale = 2500
 
-		print(xtraj0)
-
 		xr = 500+scale*xtraj0[0]
 		yr = 500-scale*xtraj0[1]
 
@@ -532,14 +625,12 @@ class ContactNet(torch.nn.Module):
 			bodies.append(r1)
 			joints += [FixedJoint(r1, bodies[0])]
 
-		pdb.set_trace()
-
 		# Point Fingers
 		traj_f = []
 		for i in range(self.N_c):
 			pos0 = [500+scale*p[i,0],500-scale*p[i+self.N_c,0]]
-			c = Circle(pos0, 1, mass = 1, vel=(0, 0, 0), restitution=restitution, fric_coeff=1, name = "f"+str(i))
-			# c.add_force(FingerTrajectory(torch.cat((0*ddp[i,:], scale*ddp[i,:], -scale*ddp[i+self.N_c,:]), axis=0).view(3,self.T+1)))
+			c = Circle(pos0, 1, mass = 1, vel=(0, 0, 0), restitution=restitution, fric_coeff=10, name = "f"+str(i))
+			c.add_force(FingerTrajectory(torch.cat((0*ddp[i,:], scale*ddp[i,:], -scale*ddp[i+self.N_c,:]), axis=0).view(3,self.T+1)))
 			traj = torch.cat((scale*dp[i,:],-scale*dp[i+self.N_c,:]), axis=0).view(2,self.T+1)
 			traj_f.append(Trajectory(vel = traj, name = "f"+str(i)))
 			if i > 0:
@@ -687,7 +778,7 @@ class ContactNet(torch.nn.Module):
 	
 		# shape encoding		
 		e_img = self.forwardShapeEncoder(np.reshape(x_img,(-1,1,50,50)))
-		print(np.shape(e_img))
+		
 		# param decoding
 		p_r = self.p_dec.forward(torch.cat((e_img.view(-1,self.shape_dim), xtraj.view(-1,45)), 1))
 		v = self.v_dec.forward(torch.cat((e_img.view(-1,self.shape_dim), xtraj.view(-1,45)), 1))
@@ -695,11 +786,11 @@ class ContactNet(torch.nn.Module):
 		fc = self.fc_dec.forward(torch.cat([xtraj.view(-1,45), v.view(-1,40)], 1))
 		fc_e = self.fce_dec.forward(torch.cat([p_e.view(-1,20), xtraj.view(-1,45)], 1))
 
-		p_e0 = x[:,60:80] # external contact location
-		v0 = x[:,120:160] # contact affordance
-		p_r0 = x[:,0:20]
-		fc0 = x[:,20:60]
-		fc_e0 = x[:,80:120]
+		p_e = x[:,60:80] # external contact location
+		# v = x[:,120:160] # contact affordance
+		# p_r = x[:,0:20]
+		fc = x[:,20:60]
+		fc_e = x[:,80:120]
 
 		# decodes each trajectory
 		for i in range(np.shape(x)[0]):
@@ -735,12 +826,10 @@ class ContactNet(torch.nn.Module):
 			# p0 = 1.2*(p[:,0]-torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0))+torch.cat((r.view(3,5)[0:2,0],r.view(3,5)[0:2,0]),axis=0)
 			p0 = p[0:4,0]
 			p = torch.cat((p0.view(-1,1), p), axis = 1)
-			print(p0)
-			dp, _ = self.Difflayer(p.view(4,6))
-			ddp, _ = self.Difflayer(dp.view(4,6))
 			
+			dp, ddp = self.Difflayer(p.view(4,6))
 			xtraj_new = self.forwardPlanarDiffSim(p, dp.double(), ddp.double(), polygons[i,:], r.view(3,5)[:,0], 10, render)
-			print(xtraj_new)
+
 			if i == 0:				
 				y = torch.cat((xtraj_new.view(1,-1), 1e-6*ddp.view(1,-1).double()), axis = 1)
 			else:
@@ -749,9 +838,12 @@ class ContactNet(torch.nn.Module):
 		# self.rad = self.rad/1.1
 		# if self.rad < 1:
 		# 	self.rad = 1
+		
+		print('\n\n\n\n\n\n DONE \n\n\n\n\n\n')
+
 		return y
 
-	def forwardVideo(self, video, xtraj, x, bypass = False):
+	def forwardVideo(self, video, xtraj, x, bypass = True):
 		# passes through the optimization problem
 		# video encoding
 		for t in range(self.T):
@@ -774,11 +866,19 @@ class ContactNet(torch.nn.Module):
 
 		embedding = torch.cat((e_vid, e_img, xtraj), axis = 1)
 
+		if self.sagittal:
+			embedding = self.re_embed(torch.cat( (embedding, torch.tensor(np.ones((np.shape(video)[0],1))).float() ) , axis = 1))
+
 		p_r = self.vid_p_dec.forward(embedding)
 		v = self.vid_v_dec.forward(embedding)
-		p_e = self.vid_pe_dec.forward(embedding)
 		fc = self.vid_fc_dec.forward(embedding)
-		fc_e = self.vid_fce_dec.forward(embedding)
+
+		if self.sagittal:
+			p_e = self.vid_sag_pe_dec.forward(embedding)
+			fc_e = self.vid_sag_fce_dec.forward(embedding)
+		else:
+			p_e = self.vid_pe_dec.forward(embedding)
+			fc_e = self.vid_fce_dec.forward(embedding)
 
 		p_e0 = x[:,60:80] # external contact location
 		v0 = x[:,120:160] # contact affordance
@@ -843,21 +943,30 @@ class ContactNet(torch.nn.Module):
 				e_vid = torch.cat((e_vid,e_frame), axis=1)
 		
 		# passes frames through RNN
-		# rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
-		# e_vid = self.fcRNN(rnn_out[:, -1, :]).detach()
-
-		e_vid = self.lstm_su(e_vid.view(-1,self.T*self.frame_dim))
-		# print('decoding')
-			
-		print('decoding')
+		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
+		e_vid = self.fcRNN(rnn_out[:, -1, :])
+		# pdb.set_trace()
+		# e_vid = self.lstm_su(e_vid.view(-1,self.T*self.frame_dim))
 		# extracts image encoding and object trajectory
-		# e_img = self.shap_dec(e_vid)
-		# xtraj = self.traj_dec(e_vid)
-		p_r = self.vid_p_dec.forward(e_vid)
-		v = self.vid_v_dec.forward(e_vid)
-		p_e = self.vid_pe_dec.forward(e_vid)
-		fc = self.vid_fc_dec.forward(e_vid)
-		fc_e = self.vid_fce_dec.forward(e_vid)
+		
+		e_img = self.shap_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+		xtraj = self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+
+		embedding = torch.cat((e_vid, e_img, xtraj), axis = 1)
+		if self.sagittal:
+			embedding = self.re_embed(torch.cat((embedding,torch.tensor(np.ones((np.shape(video)[0],1))).float()), axis = 1))
+
+		p_r = self.vid_p_dec.forward(embedding)
+		v = self.vid_v_dec.forward(embedding)
+		fc = self.vid_fc_dec.forward(embedding)
+
+		if self.sagittal:
+			p_e = self.vid_sag_pe_dec.forward(embedding)
+			fc_e = self.vid_sag_fce_dec.forward(embedding)
+		else:
+			p_e = self.vid_pe_dec.forward(embedding)
+			fc_e = self.vid_fce_dec.forward(embedding)
+
 		print('going through cvx + sim')
 		# decodes each trajectory
 		for i in range(np.shape(e_vid)[0]):
@@ -930,7 +1039,7 @@ class ContactNet(torch.nn.Module):
 	def forwardVideotoImage(self,video):
 		for t in range(self.T):
 			frame = video[:,t*3*100*100:(t+1)*3*100*100]
-			e_frame = self.forwardFrameCNN(frame).detach().view(-1,1,self.frame_dim)
+			e_frame = self.forwardFrameCNN(frame).view(-1,1,self.frame_dim)
 			if t == 0:
 				e_vid = e_frame
 			else:
@@ -950,17 +1059,18 @@ class ContactNet(torch.nn.Module):
 		# passes through all frames
 		for t in range(self.T):
 			frame = video[:,t*3*100*100:(t+1)*3*100*100]
-			e_frame = self.forwardFrameCNN(frame).detach().view(-1,1,self.frame_dim)
+			e_frame = self.forwardFrameCNN(frame).view(-1,1,self.frame_dim)
 			if t == 0:
 				e_vid = e_frame
 			else:
 				e_vid = torch.cat((e_vid,e_frame), axis=1)
 		
 		# passes frames through RNN
-		rnn_out, (h_n, h_c) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
+		rnn_out, (_, _) = self.videoRNN(e_vid.view(-1,self.T,self.frame_dim))
 		
-		# extracts object trajecotry
-		return self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+		# extracts object trajectory
+		xtraj = self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
+		return xtraj
 
 	#####################
 	# Assesment methods #
@@ -985,13 +1095,20 @@ class ContactNet(torch.nn.Module):
 		xtraj = self.traj_dec(rnn_out.contiguous().view(-1,self.T*self.rnn_dim))
 
 		embedding = torch.cat((e_vid, e_img, xtraj), axis = 1)
+		if self.sagittal:
+			embedding = self.re_embed(torch.cat((embedding,torch.tensor(np.ones((np.shape(video)[0],1))).float()), axis = 1))
 
 		# extracts the parameters
 		p_r = self.vid_p_dec.forward(embedding)
 		v = self.vid_v_dec.forward(embedding)
-		p_e = self.vid_pe_dec.forward(embedding)
 		fc = self.vid_fc_dec.forward(embedding)
-		fc_e = self.vid_fce_dec.forward(embedding)
+
+		if self.sagittal:
+			p_e = self.vid_sag_pe_dec.forward(embedding)
+			fc_e = self.vid_sag_fce_dec.forward(embedding)
+		else:
+			p_e = self.vid_pe_dec.forward(embedding)
+			fc_e = self.vid_fce_dec.forward(embedding)
 
 		# params that can be learned from above
 		p_r0 = x[:,0:20]
@@ -1117,7 +1234,7 @@ class ContactNet(torch.nn.Module):
 		y = y.clone().detach()
 		np.savetxt("../data/"+name+"_0_2f.csv", y.data.numpy(), delimiter=",")
 
-	def gen_resVid(self,vids, x, xtraj, name="res"):
-		y = self.forwardVideo(torch.tensor(vids).float(), x.float(), xtraj.float())
+	def gen_resVid(self, vids, x, xtraj, name="res"):
+		y = self.forwardVideo(torch.tensor(vids).float(), x.float(), xtraj.float(), bypass = False)
 		y = y.clone().detach()
 		np.savetxt("../data/"+name+"_0_2f.csv", y.data.numpy(), delimiter=",")

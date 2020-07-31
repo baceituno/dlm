@@ -20,11 +20,23 @@ def load_dataset(start = 1, end = 2):
 
 	return data, vids, polygons
 
-def load_dataset_block():
-	data = np.array((loadtxt("../data/bdata_" + str(start) +  "_2f_sq.csv", delimiter=',')))
-	vids = np.array((loadtxt("../data/bvids_" + str(start) +  "_2f_sq.csv", delimiter=',')))
-	
-	return data, vids
+def load_dataset_sagittal(start = 1, end = 2):
+	data = np.array((loadtxt("../data/data_sag_" + str(start) +  "_2f_sq.csv", delimiter=',')))
+	for i in range(start+1,end+1):
+	    new_data = np.array((loadtxt("../data/data_sag_"+str(i)+"_2f_sq.csv", delimiter=',')))
+	    data = np.concatenate((data, new_data), axis=0)
+
+	vids = np.array((loadtxt("../data/vids_sag_" + str(start) +  "_2f_sq.csv", delimiter=',')))
+	for i in range(start+1,end+1):
+	    new_data = np.array((loadtxt("../data/vids_sag_"+str(i)+"_2f_sq.csv", delimiter=',')))
+	    vids = np.concatenate((vids, new_data), axis=0)
+
+	polygons = np.array((loadtxt("../data/polygons_sag_" + str(start) + "_2f_sq.csv", delimiter=',')))
+	for i in range(start+1,end+1):
+	    new_data = np.array((loadtxt("../data/polygons_sag_"+str(i)+"_2f_sq.csv", delimiter=',')))
+	    polygons = np.concatenate((polygons, new_data), axis=0)
+
+	return data, vids, polygons
 
 def parse_data(data, img_dim = 2500, extra_zeros = 161):
 	inputs_1 = torch.tensor(data[:,:45]) # object trajectory
@@ -36,7 +48,6 @@ def parse_data(data, img_dim = 2500, extra_zeros = 161):
 	labels = torch.cat((torch.tensor(data[:,205+2*img_dim:]),torch.tensor(np.zeros((N_data,extra_zeros)))), axis = 1)
 
 	return inputs_1, inputs_2, inputs_img, SDF, labels
-
 
 def parse_dataVids(data, img_dim = 2500, extra_zeros = 1):
 	inputs_1 = torch.tensor(data[:,:45]) # object trajectory

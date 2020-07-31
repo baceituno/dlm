@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 print("loading training data...")
 # loads the training data
-data, vids, polygons = load_dataset(0,0) 
+data, vids, polygons = load_dataset(69,69) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, _ = parse_dataVids(data)
@@ -25,12 +25,12 @@ print(np.shape(vids))
 # define network
 print("Setting up network...")
 net = ContactNet(N_data)
-net.addFrameVAELayers()
+net.addFrameCVAELayers()
 net.addVideoLayers()
 net.addShapeVAELayers()
 net.addDecoderLayers()
-net.load(name = "cnn_0_model.pt")
-net.eval()
+# net.load(name = "cnn_x_model.pt")
+# net.eval()
 
 corr_inputs_1 = inputs_1[:,:15].float().view(-1,3,5)
 corr_inputs_1[:,2,:] = corr_inputs_1[:,2,:]*0.03
@@ -40,14 +40,14 @@ corr_inputs_1 = corr_inputs_1.float().view(-1,15)
 # TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 10)
 losses_test, losses_val = ([], [])
 criterion = torch.nn.MSELoss(reduction='mean')
-optimizer = optim.Adam(net.parameters(), lr=1e-5)
+optimizer = optim.Adam(net.parameters(), lr=1e-6)
 for epoch in range(100):
 	loss_t = 0
 	optimizer.zero_grad()
 	print('\n\n\n\n')
 	start = time.time()
-	with torch.autograd.detect_anomaly():
-		outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float())
+	# with torch.autograd.detect_anomaly():
+	outputs = net.forward2Sim(inputs_1.float(),inputs_2.float(),inputs_img.float(), torch.tensor(polygons).float(), render=False, bypass = False)
 	loss = criterion(10*outputs.float(), 10*torch.cat((corr_inputs_1[:,:15].float(),torch.tensor(np.zeros((N_data,24))).float()), axis=1))
 	loss_t = loss.item()
 	end = time.time()
