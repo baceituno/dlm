@@ -35,11 +35,12 @@ except:
 # Pre-Trains weights for the CNN + LSTM + MLP     #
 ###################################################
 
-for n in [4]:
+optimizer = optim.Adam(net.parameters(), lr= 1e-3)
+for n in [69]:
 	data, vids, pols = load_dataset(n,n) 
 	N_data = np.shape(data)[0]
 	print("parsing training data...")
-	inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
+	inputs_1, inputs_2, inputs_img, _, labels = parse_dataVidsOld(data)
 
 	corr_inputs_1 = inputs_1[:,:].float().view(-1,3,3,5)
 	# corr_inputs_1 = torch.cat((corr_inputs_1, 0.3*torch.cos(corr_inputs_1[:,:,2,:]).view(-1,3,1,5)), axis = 2)
@@ -47,12 +48,11 @@ for n in [4]:
 	inputs_1 = corr_inputs_1.float().view(N_data,-1)
 
 	print('training CNN decoders')
-	optimizer = optim.Adam(net.parameters(), lr= 1e-3)
-	TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100, n_batches = 5, optimizer = optimizer)
-	TrainVideoParams(net, vids, inputs_2, epochs = 100)
-	TrainVideo2V(net, vids, inputs_2, epochs = 2000, optimizer = optimizer)
+	# TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100, n_batches = 5, optimizer = optimizer)
+	# TrainVideoParams(net, vids, inputs_2, epochs = 100)
+	TrainVideo2V(net, vids, inputs_2, epochs = 150, optimizer = optimizer)
 
-net.save(name = "cnn_x_model.pt")
+net.save(name = "cnn_w_model.pt")
 
 
 ###################################################
@@ -60,23 +60,23 @@ net.save(name = "cnn_x_model.pt")
 ###################################################
 
 print("loading training data...")
-data, vids, pols = load_dataset(4,4) 
+data, vids, pols = load_dataset(69,69) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
-inputs_1, inputs_2, inputs_img, _, labels = parse_dataVids(data)
+inputs_1, inputs_2, inputs_img, _, labels = parse_dataVidsOld(data)
 
 print("loading test data...")
 # loads the training data
-data_v, vids_v, pols_v = load_dataset(2,2)
+data_v, vids_v, pols_v = load_dataset(69,69)
 print("parsing test data...")
-inputs_1_v, inputs_2_v, inputs_img_v, _, labels_v = parse_dataVids(data_v)
+inputs_1_v, inputs_2_v, inputs_img_v, _, labels_v = parse_dataVidsOld(data_v)
 
 criterion = torch.nn.MSELoss(reduction='mean')
-n_batches = 20
+n_batches = 1
 losses_train = []
 losses_test = []
 
-for epoch in range(100): 
+for epoch in range(20): 
 	for batch in range(n_batches):
 		idx0 = batch*N_data//n_batches
 		idx2 = (batch+1)*N_data//n_batches
@@ -102,8 +102,8 @@ for epoch in range(100):
 	print("Validation loss at epoch ",epoch," = ",loss_t)
 	losses_test.append(loss_t)
 
-# net.save(name = "cnn_2_model.pt")
-net.gen_resVid(vids, inputs_1, inputs_2, 'trainVid_2')
+net.save(name = "cnn_w_model.pt")
+# net.gen_resVid(vids, inputs_1, inputs_2, 'trainVid_2')
 
 fig, ax = plt.subplots()
 ax.plot(losses_test, '--r', label='Test')
