@@ -17,6 +17,37 @@ def LossFrameCVAE(recon_x, x, mu, logvar):
 	KLD = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
 	return 100*BCE1 + KLD
 
+
+def LossObjectFrame(x_learned, x_label, xtraj):
+	# reshapes each tensor
+	xtraj = xtraj.view(-1,3,5)
+	x_learned = x_learned.view(-1,4,5)
+	x_label = x_label.view(-1,4,5)
+
+	x_learned1 = x_learned.view(-1,4,5).clone()
+	x_label1 = x_label.view(-1,4,5).clone()
+
+	# for each time-step
+	for k in range(np.shape(x_learned)[0]):
+		for t in range(5):
+			cos = torch.cos(xtraj[k,2,t]).view(1,1)
+			sin = torch.sin(xtraj[k,2,t]).view(1,1)
+
+			x_learned1[k,0,t] = cos*(x_learned[k,0,t] - xtraj[k,0,t]) + sin*(x_learned[k,1,t] - xtraj[k,1,t])
+			x_learned1[k,1,t] = -sin*(x_learned[k,0,t] - xtraj[k,0,t]) + cos*(x_learned[k,1,t] - xtraj[k,1,t])
+
+			x_learned1[k,2,t] = cos*(x_learned[k,2,t] - xtraj[k,0,t]) + sin*(x_learned[k,3,t] - xtraj[k,1,t])
+			x_learned1[k,3,t] = -sin*(x_learned[k,2,t] - xtraj[k,0,t]) + cos*(x_learned[k,3,t] - xtraj[k,1,t])
+
+			x_label1[k,0,t] = cos*(x_label[k,0,t] - xtraj[k,0,t]) + sin*(x_label[k,1,t] - xtraj[k,1,t])
+			x_label1[k,1,t] = -sin*(x_label[k,0,t] - xtraj[k,0,t]) + cos*(x_label[k,1,t] - xtraj[k,1,t])
+
+			x_label1[k,2,t] = cos*(x_label[k,2,t] - xtraj[k,0,t]) + sin*(x_label[k,3,t] - xtraj[k,1,t])
+			x_label1[k,3,t] = -sin*(x_label[k,2,t] - xtraj[k,0,t]) + cos*(x_label[k,3,t] - xtraj[k,1,t])
+
+	criterion = torch.nn.MSELoss(reduction='mean')
+	return criterion(30*x_learned1.double(), 30*x_label1.double())
+
 def TrainVideoCVAE(net, vids, epochs = 10):
 	optimizer = optim.Adam(net.parameters(), lr=0.00001)
 	losses_test = []
@@ -69,7 +100,7 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, x_env = [], epochs = 10, n_batch
 			loss_t = 0
 			optimizer.zero_grad()
 			output = net.forwardVideotoShapes(torch.tensor(vids[idx0:idx2,:]).float())
-			loss = criterion(10*output, 10*x_img[idx0:idx2,0:7*2500].float())
+			loss = criterion(10*output[:,0:2500], 10*x_img[idx0:idx2,0:2500].float())
 			loss_t = loss.item()
 			losses_test.append(loss_t)
 			loss.backward()
@@ -77,20 +108,20 @@ def TrainVideoDecoders(net, vids, xtraj, x_img, x_env = [], epochs = 10, n_batch
 
 		print("Shapes Reconstruction loss at epoch ",epoch," = ",loss_t)
 
-	for epoch in range(epochs):
-		for batch in range(n_batches):
-			idx0 = batch*n_data//n_batches
-			idx2 = (batch+1)*n_data//n_batches
-			loss_t = 0
-			optimizer.zero_grad()
-			output = net.forwardVideotoEnv(torch.tensor(vids[idx0:idx2,:]).float())
-			loss = criterion(10*output, 10*x_env[idx0:idx2,:2500].float())
-			loss_t = loss.item()
-			losses_test.append(loss_t)
-			loss.backward()
-			optimizer.step()
+	# for epoch in range(epochs):
+	# 	for batch in range(n_batches):
+	# 		idx0 = batch*n_data//n_batches
+	# 		idx2 = (batch+1)*n_data//n_batches
+	# 		loss_t = 0
+	# 		optimizer.zero_grad()
+	# 		output = net.forwardVideotoEnv(torch.tensor(vids[idx0:idx2,:]).float())
+	# 		loss = criterion(10*output, 10*x_env[idx0:idx2,:2500].float())
+	# 		loss_t = loss.item()
+	# 		losses_test.append(loss_t)
+	# 		loss.backward()
+	# 		optimizer.step()
 
-		print("Env Reconstruction loss at epoch ",epoch," = ",loss_t)
+	# 	print("Env Reconstruction loss at epoch ",epoch," = ",loss_t)
 
 def VizVideoCondDecoders(net, vids, xtraj, x_img, epochs = 1, n_batches = 20):
 	dimVid = 3*100*100
@@ -115,7 +146,7 @@ def VizVideoCondDecoders(net, vids, xtraj, x_img, epochs = 1, n_batches = 20):
 			ax[1].imshow(np.transpose(f2, (1, 2, 0)))
 			plt.show()
 
-def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20, optimizer = None):
+def TrainVideoJointParams(net, vids, x, xtraj, epochs = 100, n_batches = 20, optimizer = None):
 	N_data = np.shape(vids)[0]
 	criterion = torch.nn.MSELoss(reduction='mean')
 	losses_test1 = []
@@ -128,18 +159,17 @@ def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20, optimizer 
 		
 			loss_t = 0
 			optimizer.zero_grad()
-			pr, v, p_e, fc, fc_e = net.forwardVideoToParams(torch.tensor(vids[idx0:idx2,:]).float(), torch.tensor(x[idx0:idx2,:]).float())
+			pr, v, p_e, fc, fc_e = net.forwardVideoToParams(torch.tensor(vids[idx0:idx2,:]).float(), torch.tensor(x[idx0:idx2,:]).float(), xtraj = xtraj[idx0:idx2,:])
 			loss = criterion(100*pr, torch.tensor(np.zeros((N_data//n_batches, 20))).float())
 			loss += criterion(100*v, torch.tensor(np.zeros((N_data//n_batches, 40))).float())
 			loss += criterion(100*p_e, torch.tensor(np.zeros((N_data//n_batches, 20))).float())
 			loss += criterion(10*fc, torch.tensor(np.zeros((N_data//n_batches, 40))).float())
 			loss += criterion(10*fc_e, torch.tensor(np.zeros((N_data//n_batches, 40))).float())
 			loss_t = loss.item()
-			losses_test1.append(loss_t)
 			loss.backward()
 			optimizer.step()
 
-		pr, v, p_e, fc, fc_e = net.forwardVideoToParams(torch.tensor(vids).float(), torch.tensor(x).float())
+		pr, v, p_e, fc, fc_e = net.forwardVideoToParams(torch.tensor(vids).float(), torch.tensor(x).float(), xtraj = xtraj)
 		loss = criterion(100*pr, torch.tensor(np.zeros((N_data, 20))).float())
 		loss += criterion(100*v, torch.tensor(np.zeros((N_data, 40))).float())
 		loss += criterion(100*p_e, torch.tensor(np.zeros((N_data, 20))).float())
@@ -148,6 +178,14 @@ def TrainVideoJointParams(net, vids, x, epochs = 100, n_batches = 20, optimizer 
 		loss_t = loss.item()
 
 		print("params Reconstruction loss at epoch ",epoch," = ",loss_t)
+
+	dpr = criterion(100*pr, torch.tensor(np.zeros((N_data, 20))).float()).item()
+	dv = criterion(100*v, torch.tensor(np.zeros((N_data, 40))).float()).item()
+	dpe = criterion(100*p_e, torch.tensor(np.zeros((N_data, 20))).float()).item()
+	dfc = criterion(10*fc, torch.tensor(np.zeros((N_data, 40))).float()).item()
+	dfce = criterion(10*fc_e, torch.tensor(np.zeros((N_data, 40))).float()).item()
+
+	return loss_t, dpr, dv, dpe, dfc, dfce
 
 def TrainMaskJointParams(net, xtraj, x_img, x, epochs = 100, n_batches = 20, optimizer = None):
 	N_data = np.shape(xtraj)[0]
@@ -193,11 +231,69 @@ def TrainVideo2V(net, vids, x, epochs = 100, optimizer = None):
 		optimizer.zero_grad()
 		_, v, _, _, _ = net.forwardVideoToParams(torch.tensor(vids).float(), torch.tensor(x).float())
 		loss = criterion(100*v, torch.tensor(np.zeros((N_data, 40))).float())
+		# loss = LossObjectFrame(outputs, p[:,0:20], inputs_1.float())
 		loss_t = loss.item()
 		loss.backward()
 		optimizer.step()
 
 		print("v Reconstruction loss at epoch ",epoch," = ",loss_t)
+
+def TrainVideo2P_NN(net, vids, x, inputs_1, p, epochs = 100, optimizer = None):
+	N_data = np.shape(vids)[0]
+	criterion = torch.nn.MSELoss(reduction='mean')
+	labels = torch.tensor(net.forwardVideo(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = False, pass_soft = True).clone().detach().numpy())
+
+	for epoch in range(epochs):
+		loss_t = 0
+		optimizer.zero_grad()
+		outputs = net.forwardVideo(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = True)
+		loss = criterion(100*outputs, 100*labels.float())
+		# loss = LossObjectFrame(outputs, p[:,0:20], inputs_1.float())
+		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
+
+		print("p Reconstruction loss at epoch ",epoch," = ",loss_t)
+
+	return loss_t
+
+def TrainVideo2P_CVX(net, vids, x, inputs_1, p = [], epochs = 100, optimizer = None):
+	N_data = np.shape(vids)[0]
+	criterion = torch.nn.MSELoss(reduction='mean')
+	labels = torch.tensor(net.forwardVideo(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = False, pass_soft = True).clone().detach().numpy())
+
+	for epoch in range(epochs):
+		loss_t = 0
+		optimizer.zero_grad()
+		outputs = net.forwardVideo(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = False, pass_soft = False)
+		loss = criterion(100*outputs, 100*labels.float())
+		# loss = LossObjectFrame(outputs, p[:,0:20], inputs_1.float())
+		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
+
+		print("p Reconstruction loss at epoch ",epoch," = ",loss_t)
+
+	return loss_t
+
+def TrainVideoCVXStructure(net, vids, x, inputs_1, p = [], epochs = 100, optimizer = None):
+	N_data = np.shape(vids)[0]
+	criterion = torch.nn.MSELoss(reduction='mean')
+	labels = torch.tensor(net.forwardVideo(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = False, pass_soft = True).clone().detach().numpy())
+
+	for epoch in range(epochs):
+		loss_t = 0
+		optimizer.zero_grad()
+		outputs = net.forwardVideotoCVX(torch.tensor(vids).float(), inputs_1.float(), x.float(), bypass = False, pass_soft = False)
+		loss = criterion(1000*outputs, 0.0*labels.float()[:,0])
+		# loss = LossObjectFrame(outputs, p[:,0:20], inputs_1.float())
+		loss_t = loss.item()
+		loss.backward()
+		optimizer.step()
+
+		print("CVX loss at epoch ",epoch," = ",loss_t)
+
+	return loss_t
 
 def TrainVideoParams(net, vids, x, epochs = 100, plot = False, optimizer = None):
 	N_data = np.shape(vids)[0]

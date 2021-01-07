@@ -36,7 +36,7 @@ except:
 ###################################################
 
 optimizer = optim.Adam(net.parameters(), lr= 1e-3)
-for n in [69]:
+for n in [1,2,3,4]:
 	data, vids, pols = load_dataset(n,n) 
 	N_data = np.shape(data)[0]
 	print("parsing training data...")
@@ -48,9 +48,9 @@ for n in [69]:
 	inputs_1 = corr_inputs_1.float().view(N_data,-1)
 
 	print('training CNN decoders')
-	# TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 100, n_batches = 5, optimizer = optimizer)
-	# TrainVideoParams(net, vids, inputs_2, epochs = 100)
-	TrainVideo2V(net, vids, inputs_2, epochs = 150, optimizer = optimizer)
+	TrainVideoDecoders(net, vids, inputs_1, inputs_img, epochs = 500, n_batches = 5, optimizer = optimizer)
+	TrainVideoParams(net, vids, inputs_2, epochs = 500, optimizer = optimizer)
+	TrainVideo2V(net, vids, inputs_2, epochs = 1000, optimizer = optimizer)
 
 net.save(name = "cnn_w_model.pt")
 
@@ -60,14 +60,14 @@ net.save(name = "cnn_w_model.pt")
 ###################################################
 
 print("loading training data...")
-data, vids, pols = load_dataset(69,69) 
+data, vids, pols = load_dataset(1,1) 
 N_data = np.shape(data)[0]
 print("parsing training data...")
 inputs_1, inputs_2, inputs_img, _, labels = parse_dataVidsOld(data)
 
 print("loading test data...")
 # loads the training data
-data_v, vids_v, pols_v = load_dataset(69,69)
+data_v, vids_v, pols_v = load_dataset(4,4)
 print("parsing test data...")
 inputs_1_v, inputs_2_v, inputs_img_v, _, labels_v = parse_dataVidsOld(data_v)
 
