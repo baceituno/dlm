@@ -1,11 +1,11 @@
 A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation
 ===================================================
 
-This repository contains the source code of the paper [A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation]().
+This repository contains the source code of the paper [A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation](https://openreview.net/forum?id=f7KaqYLO3iE).
 
 # Content
 
-The code contains three sets of experiments:
+The code contains five sets of experiments:
 ```
 1. Fully connneced Neural Network Trained on robot actions (Exp_NN)
 2. Fully connneced Neural Network Trained on differnetiable simulator (Exp_NNM)
