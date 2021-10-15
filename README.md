@@ -1,23 +1,55 @@
-# Source Code
+A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation
+===================================================
 
-**Dependencies:**
+This repository contains the source code of the paper [A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation]().
+
+# Content
+
+The code contains three sets of experiments:
+```
+1. Fully connneced Neural Network Trained on robot actions (Exp_NN)
+2. Fully connneced Neural Network Trained on differnetiable simulator (Exp_NNM)
+3. Differentiable Pipaline Trained on machanical parameters (Exp_MDR)
+4. Differentiable Pipaline Trained on machanical parameters and CVX Layer (Exp_CVX)
+5. Differentiable Pipaline Trained on end to end with simulation (Exp_DDM)
+```
+# Installation
+
+Install the dependencies:
 
 1. Pytorch 1.4.0 (https://pytorch.org/)
 2. CVXPy Layers (https://github.com/cvxgrp/cvxpylayers)
 2. PyGame (https://www.pygame.org/wiki/GettingStarted)
 2. PyODE (http://pyode.sourceforge.net/)
 
+To install the simulator, also install:
+
+```
+cd ./src/diffsim_lcp
+python setup.py install --user
+```
+
 Tested in Python 3.7.7
 
-**Intallation:**
+# Usage 
 
-1. install dependencies
-2. cd ./src/diffsim_lcp
-3. python setup.py install --user
+## Example 1: Fully connneced Neural Network Trained on robot actions
 
-**Usage:**
+```
+Coming soon
+```
 
-1. go to folder training
-2. python Exp_CVX.py
+# Citing
+If you find this repository helpful in your publications, please cite the following:
 
-This example will show how we train the CVX baseline of our paper and how it is tested on simulations.
+```
+@inproceedings{aceituno2021corl,
+    title={A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation },
+    author={B. Aceituno, and A. Rodriguez, and S. Tulsiani, and A. Gupta, and M. Mukadam},
+    booktitle={CoRL},
+    year={2021}
+}
+```
+
+# License
+This repository is licensed under the [MIT License](LICENSE.md).
