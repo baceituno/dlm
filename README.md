@@ -11,7 +11,7 @@ The code contains five sets of experiments:
 2. Fully connneced Neural Network Trained on differnetiable simulator (Exp_NNM)
 3. Differentiable Pipaline Trained on machanical parameters (Exp_MDR)
 4. Differentiable Pipaline Trained on machanical parameters and CVX Layer (Exp_CVX)
-5. Differentiable Pipaline Trained on end to end with simulation (Exp_DDM)
+5. Differentiable Pipaline Trained on end to end with simulation (Exp_DLM)
 ```
 # Installation
 
