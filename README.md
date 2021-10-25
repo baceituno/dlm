@@ -1,7 +1,7 @@
 A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation
 ===================================================
 
-This repository contains the source code of the paper [A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation](https://openreview.net/forum?id=f7KaqYLO3iE).
+This repository contains the source code of the paper [A Differentiable Recipe for Learning Visual Non-Prehensile Planar Manipulation](https://openreview.net/forum?id=f7KaqYLO3iE), CoRL 2021.
 
 # Content
 
