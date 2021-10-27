@@ -31,14 +31,6 @@ python setup.py install --user
 
 Tested in Python 3.7.7
 
-# Usage 
-
-## Example 1: Fully connneced Neural Network Trained on robot actions
-
-```
-Coming soon
-```
-
 # Citing
 If you find this repository helpful in your publications, please cite the following:
 
